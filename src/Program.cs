@@ -23,7 +23,7 @@ namespace NuVelocity.Unpacker
         static void TestSequence()
         {
             var b = new Sequence(File.Open("test.Sequence", FileMode.Open));
-            File.WriteAllText("Properties.txt", b.Serialize());
+            File.WriteAllText("Properties.txt", b.RawList.Serialize());
             //File.WriteAllBytes("seq1", b._embeddedLists);
             //File.WriteAllBytes("seq2", b._sequenceSpriteSheet);
             //if (b._rawMaskData != null)
@@ -31,7 +31,11 @@ namespace NuVelocity.Unpacker
             //    File.WriteAllBytes("seq3", b._rawMaskData);
             //}
 
-            b.ToImage().SaveAsPng("testseq.png");
+            var bo = b.ToImage();
+            if (bo != null)
+            {
+                bo.SaveAsPng("testseq.png");
+            }
 
             var images = b.ToImages();
             for (int i = 0; i < images.Length; i++)
@@ -54,7 +58,8 @@ namespace NuVelocity.Unpacker
             foreach (string file in Directory.EnumerateFiles("Data", "*.Frame", SearchOption.AllDirectories))
             {
                 Frame frame = new(File.Open(file, FileMode.Open));
-                string target = file.Replace("\\Cache", "").Replace(".Frame", ".tga");
+                string target = file.Replace("\\Cache", "\\Export").Replace(".Frame", ".tga");
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
                 frame.ToImage().Save(target, tgaEncoder);
                 File.AppendAllText("log.txt", $"{file} " +
                     $": {BitConverter.ToString(frame.Unknown1)} " +
@@ -66,8 +71,9 @@ namespace NuVelocity.Unpacker
                 Sequence sequence = new(File.Open(file, FileMode.Open));
                 string sequenceName = Path.GetFileNameWithoutExtension(file);
                 string sequenceSimpleName = sequenceName.Replace(" ", "");
-                string target = Path.Combine(Path.GetDirectoryName(file.Replace("\\Cache", "")), "-" + sequenceName);
+                string target = Path.Combine(Path.GetDirectoryName(file).Replace("\\Cache", "\\Export"), "-" + sequenceName);
                 Directory.CreateDirectory(target);
+                File.WriteAllText($"{target}\\Properties.txt", sequence.RawList.Serialize());
                 var images = sequence.ToImages();
                 if (images == null)
                 {
@@ -78,7 +84,6 @@ namespace NuVelocity.Unpacker
                     var image = images[i];
                     image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", tgaEncoder);
                 }
-                File.WriteAllText($"{target}\\Properties.txt", sequence.Serialize());
                 File.AppendAllText("log.txt", $"{file}\n");
             }
 
