@@ -1,11 +1,57 @@
 ﻿using SixLabors.ImageSharp.Formats.Tga;
 using System.IO;
 using NuVelocity.IO;
+using System.Diagnostics;
 
 namespace NuVelocity.Unpacker
 {
     internal class Program
     {
+        /*
+        static void TestSequenceRepack()
+        {
+            Sequence.Repack(
+                File.OpenWrite("repack.Sequence"),
+                File.ReadAllBytes("seq1"),
+                File.ReadAllBytes("seq2"),
+                File.ReadAllBytes("seq3"));
+        }
+
+        
+        public static void Repack(Stream stream, byte[] frameInfo, byte[] spritesheet, byte[] mask)
+        {
+            BinaryWriter writer = new(stream);
+            writer.Write(kSignatureStandard);
+
+            Deflater deflater = new(Deflater.BEST_COMPRESSION);
+
+            byte[] bufferFrameInfo = new byte[frameInfo.Length * 2];
+            byte[] bufferMask = new byte[mask.Length * 2];
+
+            deflater.SetInput(frameInfo);
+            deflater.Flush();
+            int deflatedSize = deflater.Deflate(bufferFrameInfo);
+            deflater.Finish();
+            writer.Write(deflatedSize);
+            writer.Write(frameInfo.Length);
+            writer.Write(bufferFrameInfo, 0, deflatedSize);
+
+            writer.Write(false);
+            writer.Write(spritesheet.Length);
+            writer.Write(spritesheet);
+            writer.Write((byte)0x0);
+
+            writer.Write(mask.Length);
+            deflater.Reset();
+            deflater.SetInput(mask);
+            deflater.Flush();
+            deflatedSize = deflater.Deflate(bufferMask);
+            deflater.Finish();
+            writer.Write(bufferMask, 0, deflatedSize);
+
+            writer.Flush();
+        }
+        */
         static TgaEncoder tgaEncoder => new()
         {
             BitsPerPixel = TgaBitsPerPixel.Pixel32,
@@ -22,25 +68,37 @@ namespace NuVelocity.Unpacker
 
         static void TestSequence()
         {
-            var b = new Sequence(File.Open("test.Sequence", FileMode.Open));
-            File.WriteAllText("Properties.txt", b.RawList.Serialize());
-            //File.WriteAllBytes("seq1", b._embeddedLists);
-            //File.WriteAllBytes("seq2", b._sequenceSpriteSheet);
-            //if (b._rawMaskData != null)
-            //{
-            //    File.WriteAllBytes("seq3", b._rawMaskData);
-            //}
-
-            var bo = b.ToImage();
-            if (bo != null)
+            foreach (string file in Directory.EnumerateFiles("Tests", "*.Sequence", SearchOption.AllDirectories))
             {
-                bo.SaveAsPng("testseq.png");
-            }
+                var b = new Sequence(File.Open(file, FileMode.Open));
+                string sequenceName = Path.GetFileNameWithoutExtension(file);
+                string target = Path.Combine(Path.GetDirectoryName(file), "-" + sequenceName);
+                Directory.CreateDirectory(target);
+                File.WriteAllText($"{target}\\Properties.txt", b.RawList.Serialize());
+                File.WriteAllBytes($"{target}\\_lists", b._embeddedLists);
+                if (b._sequenceSpriteSheet != null)
+                {
+                    File.WriteAllBytes($"{target}\\_rawImage", b._sequenceSpriteSheet);
+                }
+                if (b._rawMaskData != null)
+                {
+                    File.WriteAllBytes($"{target}\\_rawMask", b._rawMaskData);
+                }
 
-            var images = b.ToImages();
-            for (int i = 0; i < images.Length; i++)
-            {
-                images[i].SaveAsPng($"testseq{i}.png");
+                var bo = b.ToImage();
+                if (bo != null)
+                {
+                    bo.SaveAsPng($"{target}\\_atlas.png");
+                }
+
+                string sequenceSimpleName = sequenceName.Replace(" ", "");
+                var images = b.ToImages();
+                for (int i = 0; i < images.Length; i++)
+                {
+                    images[i].Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", tgaEncoder);
+                    images[i].SaveAsPng($"{target}\\{sequenceSimpleName}{i:0000}.png");
+                }
+                Console.WriteLine(file);
             }
         }
 
@@ -48,6 +106,7 @@ namespace NuVelocity.Unpacker
         {
             //TestFrame();
             //TestSequence();
+            //TestSequenceRepack();
             //return;
 
             if (File.Exists("log.txt"))
@@ -61,9 +120,11 @@ namespace NuVelocity.Unpacker
                 string target = file.Replace("\\Cache", "\\Export").Replace(".Frame", ".tga");
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
                 frame.ToImage().Save(target, tgaEncoder);
-                File.AppendAllText("log.txt", $"{file} " +
-                    $": {BitConverter.ToString(frame.Unknown1)} " +
-                    $": {BitConverter.ToString(frame.Unknown2)}\n");
+                string logText = $"{file} " +
+                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
+                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))}\n";
+                File.AppendAllText("log.txt", logText);
+                Console.Write(logText);
             }
 
             foreach (string file in Directory.EnumerateFiles("Data", "*.Sequence", SearchOption.AllDirectories))
@@ -73,8 +134,8 @@ namespace NuVelocity.Unpacker
                 string sequenceSimpleName = sequenceName.Replace(" ", "");
                 string target = Path.Combine(Path.GetDirectoryName(file).Replace("\\Cache", "\\Export"), "-" + sequenceName);
                 Directory.CreateDirectory(target);
-                File.WriteAllText($"{target}\\Properties.txt", sequence.RawList.Serialize());
                 var images = sequence.ToImages();
+                File.WriteAllText($"{target}\\Properties.txt", sequence.RawList.Serialize());
                 if (images == null)
                 {
                     continue;
@@ -84,7 +145,11 @@ namespace NuVelocity.Unpacker
                     var image = images[i];
                     image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", tgaEncoder);
                 }
-                File.AppendAllText("log.txt", $"{file}\n");
+                bool centerHotSpot = ((string)sequence.RawList.Properties
+                    .First((property) => property.Name == "Center Hot Spot").Value) == "1";
+                string logText = $"{file} : {centerHotSpot}\n";
+                File.AppendAllText("log.txt", logText);
+                Console.Write(logText);
             }
 
             Console.WriteLine("Done.");
