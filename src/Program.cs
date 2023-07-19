@@ -135,7 +135,13 @@ namespace NuVelocity.Unpacker
                 string target = Path.Combine(Path.GetDirectoryName(file).Replace("\\Cache", "\\Export"), "-" + sequenceName);
                 Directory.CreateDirectory(target);
                 var images = sequence.ToImages();
-                File.WriteAllText($"{target}\\Properties.txt", sequence.RawList.Serialize());
+                bool? centerHotSpot = null;
+                if (sequence.RawList != null)
+                {
+                    File.WriteAllText($"{target}\\Properties.txt", sequence.RawList.Serialize());
+                    centerHotSpot = ((string)sequence.RawList.Properties
+                        .First((property) => property.Name == "Center Hot Spot").Value) == "1";
+                }
                 if (images == null)
                 {
                     continue;
@@ -145,8 +151,6 @@ namespace NuVelocity.Unpacker
                     var image = images[i];
                     image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", tgaEncoder);
                 }
-                bool centerHotSpot = ((string)sequence.RawList.Properties
-                    .First((property) => property.Name == "Center Hot Spot").Value) == "1";
                 string logText = $"{file} : {centerHotSpot}\n";
                 File.AppendAllText("log.txt", logText);
                 Console.Write(logText);
