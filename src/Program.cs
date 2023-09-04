@@ -119,10 +119,28 @@ namespace NuVelocity.Unpacker
                 Frame frame = new(File.Open(file, FileMode.Open));
                 string target = file.Replace("\\Cache", "\\Export").Replace(".Frame", ".tga");
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
+
+                string propTarget = file.Replace("\\Cache", "").Replace(".Frame", ".txt");
+                if (File.Exists(propTarget))
+                {
+                    frame.ReadPropertiesFromStream(File.Open(propTarget, FileMode.Open));
+                }
                 frame.ToImage().Save(target, tgaEncoder);
+
+                bool? centerHotSpot = null;
+                if (frame.RawList != null)
+                {
+                    RawProperty centerHotSpotProp = frame.RawList.Properties
+                        .FirstOrDefault((property) => property.Name == "Center Hot Spot", null);
+                    centerHotSpot = centerHotSpotProp == null
+                        ? false
+                        : ((string)centerHotSpotProp.Value) == "1";
+                }
+
                 string logText = $"{file} " +
                     $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
-                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))}\n";
+                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))} " +
+                    $": {centerHotSpot}\n";
                 File.AppendAllText("log.txt", logText);
                 Console.Write(logText);
             }
