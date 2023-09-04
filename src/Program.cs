@@ -60,10 +60,18 @@ namespace NuVelocity.Unpacker
 
         static void TestFrame()
         {
-            var a = new Frame(File.Open("test.Frame", FileMode.Open));
-            a.ToImage().SaveAsPng("test.png");
-            a.ToImage().Save("test.tga", tgaEncoder);
-            File.WriteAllBytes("test.b", a.ToBytes());
+            foreach (string file in Directory.EnumerateFiles("Tests", "*.Frame", SearchOption.AllDirectories))
+            {
+                Frame frame = new(File.Open(file, FileMode.Open));
+                string target = file.Replace(".Frame", ".");
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                frame.ToImage().Save(target + "tga", tgaEncoder);
+                frame.ToImage().SaveAsPng(target + "png");
+                string logText = $"{file} " +
+                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
+                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))}\n";
+                Console.Write(logText);
+            }
         }
 
         static void TestSequence()
