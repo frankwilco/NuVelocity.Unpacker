@@ -7,51 +7,6 @@ namespace NuVelocity.Unpacker
 {
     internal class Program
     {
-        /*
-        static void TestSequenceRepack()
-        {
-            Sequence.Repack(
-                File.OpenWrite("repack.Sequence"),
-                File.ReadAllBytes("seq1"),
-                File.ReadAllBytes("seq2"),
-                File.ReadAllBytes("seq3"));
-        }
-
-        
-        public static void Repack(Stream stream, byte[] frameInfo, byte[] spritesheet, byte[] mask)
-        {
-            BinaryWriter writer = new(stream);
-            writer.Write(kSignatureStandard);
-
-            Deflater deflater = new(Deflater.BEST_COMPRESSION);
-
-            byte[] bufferFrameInfo = new byte[frameInfo.Length * 2];
-            byte[] bufferMask = new byte[mask.Length * 2];
-
-            deflater.SetInput(frameInfo);
-            deflater.Flush();
-            int deflatedSize = deflater.Deflate(bufferFrameInfo);
-            deflater.Finish();
-            writer.Write(deflatedSize);
-            writer.Write(frameInfo.Length);
-            writer.Write(bufferFrameInfo, 0, deflatedSize);
-
-            writer.Write(false);
-            writer.Write(spritesheet.Length);
-            writer.Write(spritesheet);
-            writer.Write((byte)0x0);
-
-            writer.Write(mask.Length);
-            deflater.Reset();
-            deflater.SetInput(mask);
-            deflater.Flush();
-            deflatedSize = deflater.Deflate(bufferMask);
-            deflater.Finish();
-            writer.Write(bufferMask, 0, deflatedSize);
-
-            writer.Flush();
-        }
-        */
         static TgaEncoder tgaEncoder => new()
         {
             BitsPerPixel = TgaBitsPerPixel.Pixel32,
