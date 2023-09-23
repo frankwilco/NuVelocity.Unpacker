@@ -65,6 +65,15 @@ namespace NuVelocity.Unpacker
                 Frame frame = new(File.Open(file, FileMode.Open));
                 string target = file.Replace(".Frame", ".");
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
+                var rawData = frame.DumpRawData();
+                if (rawData.Item1 != null)
+                {
+                    File.WriteAllBytes($"{target}_data", rawData.Item1);
+                }
+                if (rawData.Item2 != null)
+                {
+                    File.WriteAllBytes($"{target}_rawMask", rawData.Item2);
+                }
                 frame.ToImage().Save(target + "tga", tgaEncoder);
                 frame.ToImage().SaveAsPng(target + "png");
                 string logText = $"{file} " +
@@ -82,15 +91,22 @@ namespace NuVelocity.Unpacker
                 string sequenceName = Path.GetFileNameWithoutExtension(file);
                 string target = Path.Combine(Path.GetDirectoryName(file), "-" + sequenceName);
                 Directory.CreateDirectory(target);
-                File.WriteAllText($"{target}\\Properties.txt", b.RawList.Serialize());
-                File.WriteAllBytes($"{target}\\_lists", b._embeddedLists);
-                if (b._sequenceSpriteSheet != null)
+                if (b.RawList != null)
                 {
-                    File.WriteAllBytes($"{target}\\_rawImage", b._sequenceSpriteSheet);
+                    File.WriteAllText($"{target}\\Properties.txt", b.RawList.Serialize());
                 }
-                if (b._rawMaskData != null)
+                var rawData = b.DumpRawData();
+                if (rawData.Item1 != null)
                 {
-                    File.WriteAllBytes($"{target}\\_rawMask", b._rawMaskData);
+                    File.WriteAllBytes($"{target}\\_lists", rawData.Item1);
+                }
+                if (rawData.Item2 != null)
+                {
+                    File.WriteAllBytes($"{target}\\_rawImage", rawData.Item2);
+                }
+                if (rawData.Item3 != null)
+                {
+                    File.WriteAllBytes($"{target}\\_rawMask", rawData.Item3);
                 }
 
                 var bo = b.ToImage();
