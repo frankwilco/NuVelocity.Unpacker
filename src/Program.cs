@@ -34,10 +34,7 @@ namespace NuVelocity.Unpacker
                 }
                 frame.Texture.Save(target + "tga", TgaEncoder);
                 frame.Texture.SaveAsPng(target + "png");
-                string logText = $"{file} " +
-                    //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
-                    //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))}" +
-                    $"\n";
+                string logText = $"{file}\n";
                 Console.Write(logText);
             }
         }
@@ -114,10 +111,7 @@ namespace NuVelocity.Unpacker
                 Frame frame = Frame.FromStream(frameFile, propFile);
                 frame.Texture.Save(target, TgaEncoder);
 
-                string logText = $"{file} " +
-                    //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
-                    //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))} " +
-                    $": {frame.CenterHotSpot}\n";
+                string logText = $"{file} : {frame.CenterHotSpot}\n";
                 File.AppendAllText("log.txt", logText);
                 Console.Write(logText);
             }
