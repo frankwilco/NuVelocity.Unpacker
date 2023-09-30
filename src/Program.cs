@@ -15,7 +15,9 @@ namespace NuVelocity.Unpacker
 
         private static void TestFrame()
         {
-            foreach (string file in Directory.EnumerateFiles("Tests", "*.Frame", SearchOption.AllDirectories))
+            var frameFiles = Directory.EnumerateFiles(
+                "Tests", "*.Frame", SearchOption.AllDirectories);
+            Parallel.ForEach(frameFiles, (file) =>
             {
                 Frame frame = Frame.FromStream(
                     out byte[] imageData,
@@ -36,14 +38,16 @@ namespace NuVelocity.Unpacker
                 frame.Texture.SaveAsPng(target + "png");
                 string logText = $"{file}\n";
                 Console.Write(logText);
-            }
+            });
         }
 
         private static void TestSequence()
         {
-            foreach (string file in Directory.EnumerateFiles("Tests", "*.Sequence", SearchOption.AllDirectories))
+            var sequenceFiles = Directory.EnumerateFiles(
+                "Tests", "*.Sequence", SearchOption.AllDirectories);
+            Parallel.ForEach(sequenceFiles, (file) =>
             {
-                var b = Sequence.FromStream(
+                var sequence = Sequence.FromStream(
                     out byte[] lists,
                     out byte[] rawImage,
                     out byte[] maskData,
@@ -54,7 +58,7 @@ namespace NuVelocity.Unpacker
                 Directory.CreateDirectory(target);
 
                 FileStream propFile = File.Create($"{target}\\Properties.txt");
-                PropertySerializer.Serialize(propFile, b, b.Source);
+                PropertySerializer.Serialize(propFile, sequence, sequence.Source);
 
                 if (lists != null)
                 {
@@ -74,14 +78,14 @@ namespace NuVelocity.Unpacker
                 }
 
                 string sequenceSimpleName = sequenceName.Replace(" ", "");
-                var images = b.Textures;
+                var images = sequence.Textures;
                 for (int i = 0; i < images.Length; i++)
                 {
                     images[i].Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
                     images[i].SaveAsPng($"{target}\\{sequenceSimpleName}{i:0000}.png");
                 }
-                Console.WriteLine($"{file} - {b.Source}");
-            }
+                Console.WriteLine($"{file} - {sequence.Source}");
+            });
         }
 
         private static void Main(string[] args)
@@ -96,7 +100,11 @@ namespace NuVelocity.Unpacker
                 File.Delete("log.txt");
             }
 
-            foreach (string file in Directory.EnumerateFiles("Data", "*.Frame", SearchOption.AllDirectories))
+            List<string> logs = new();
+
+            var frameFiles = Directory.EnumerateFiles(
+                "Data", "*.Frame", SearchOption.AllDirectories);
+            Parallel.ForEach(frameFiles, (file) =>
             {
                 string target = file.Replace("\\Cache", "\\Export").Replace(".Frame", ".tga");
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
@@ -112,11 +120,13 @@ namespace NuVelocity.Unpacker
                 frame.Texture.Save(target, TgaEncoder);
 
                 string logText = $"{file} : {frame.CenterHotSpot}\n";
-                File.AppendAllText("log.txt", logText);
+                logs.Add(logText);
                 Console.Write(logText);
-            }
+            });
 
-            foreach (string file in Directory.EnumerateFiles("Data", "*.Sequence", SearchOption.AllDirectories))
+            var sequenceFiles = Directory.EnumerateFiles(
+                "Data", "*.Sequence", SearchOption.AllDirectories);
+            Parallel.ForEach(sequenceFiles, (file) =>
             {
                 Sequence sequence = Sequence.FromStream(File.Open(file, FileMode.Open));
                 string sequenceName = Path.GetFileNameWithoutExtension(file);
@@ -130,7 +140,7 @@ namespace NuVelocity.Unpacker
 
                 if (images == null)
                 {
-                    continue;
+                    return;
                 }
                 for (int i = 0; i < images.Length; i++)
                 {
@@ -139,9 +149,11 @@ namespace NuVelocity.Unpacker
                 }
 
                 string logText = $"{file} : {sequence.CenterHotSpot}, {sequence.Source}\n";
-                File.AppendAllText("log.txt", logText);
+                logs.Add(logText);
                 Console.Write(logText);
-            }
+            });
+
+            File.WriteAllLines("log.txt", logs);
 
             Console.WriteLine("Done.");
         }
