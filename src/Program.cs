@@ -17,23 +17,27 @@ namespace NuVelocity.Unpacker
         {
             foreach (string file in Directory.EnumerateFiles("Tests", "*.Frame", SearchOption.AllDirectories))
             {
-                Frame frame = new(File.Open(file, FileMode.Open));
+                Frame frame = Frame.FromStream(
+                    out byte[] imageData,
+                    out byte[] maskData,
+                    File.Open(file, FileMode.Open));
                 string target = file.Replace(".Frame", ".");
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
-                var rawData = frame.DumpRawData();
-                if (rawData.Item1 != null)
+
+                if (imageData != null)
                 {
-                    File.WriteAllBytes($"{target}_data", rawData.Item1);
+                    File.WriteAllBytes($"{target}_data", imageData);
                 }
-                if (rawData.Item2 != null)
+                if (maskData != null)
                 {
-                    File.WriteAllBytes($"{target}_rawMask", rawData.Item2);
+                    File.WriteAllBytes($"{target}_rawMask", maskData);
                 }
-                frame.ToImage().Save(target + "tga", tgaEncoder);
-                frame.ToImage().SaveAsPng(target + "png");
+                frame.Texture.Save(target + "tga", tgaEncoder);
+                frame.Texture.SaveAsPng(target + "png");
                 string logText = $"{file} " +
-                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
-                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))}\n";
+                    //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
+                    //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))}" +
+                    $"\n";
                 Console.Write(logText);
             }
         }
@@ -42,42 +46,44 @@ namespace NuVelocity.Unpacker
         {
             foreach (string file in Directory.EnumerateFiles("Tests", "*.Sequence", SearchOption.AllDirectories))
             {
-                var b = new Sequence(File.Open(file, FileMode.Open));
+                var b = Sequence.FromStream(
+                    out byte[] lists,
+                    out byte[] rawImage,
+                    out byte[] maskData,
+                    out Image spritesheet,
+                    File.Open(file, FileMode.Open));
                 string sequenceName = Path.GetFileNameWithoutExtension(file);
                 string target = Path.Combine(Path.GetDirectoryName(file), "-" + sequenceName);
                 Directory.CreateDirectory(target);
-                if (b.RawList != null)
-                {
-                    File.WriteAllText($"{target}\\Properties.txt", b.RawList.Serialize());
-                }
-                var rawData = b.DumpRawData();
-                if (rawData.Item1 != null)
-                {
-                    File.WriteAllBytes($"{target}\\_lists", rawData.Item1);
-                }
-                if (rawData.Item2 != null)
-                {
-                    File.WriteAllBytes($"{target}\\_rawImage", rawData.Item2);
-                }
-                if (rawData.Item3 != null)
-                {
-                    File.WriteAllBytes($"{target}\\_rawMask", rawData.Item3);
-                }
 
-                var bo = b.ToImage();
-                if (bo != null)
+                FileStream propFile = File.Create($"{target}\\Properties.txt");
+                PropertySerializer.Serialize(propFile, b, b.Source);
+
+                if (lists != null)
                 {
-                    bo.SaveAsPng($"{target}\\_atlas.png");
+                    File.WriteAllBytes($"{target}\\_lists", lists);
+                }
+                if (rawImage != null)
+                {
+                    File.WriteAllBytes($"{target}\\_rawImage", rawImage);
+                }
+                if (maskData != null)
+                {
+                    File.WriteAllBytes($"{target}\\_rawMask", maskData);
+                }
+                if (spritesheet != null)
+                {
+                    spritesheet.SaveAsPng($"{target}\\_atlas.png");
                 }
 
                 string sequenceSimpleName = sequenceName.Replace(" ", "");
-                var images = b.ToImages();
+                var images = b.Textures;
                 for (int i = 0; i < images.Length; i++)
                 {
                     images[i].Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", tgaEncoder);
                     images[i].SaveAsPng($"{target}\\{sequenceSimpleName}{i:0000}.png");
                 }
-                Console.WriteLine(file);
+                Console.WriteLine($"{file} - {b.Source}");
             }
         }
 
@@ -95,50 +101,39 @@ namespace NuVelocity.Unpacker
 
             foreach (string file in Directory.EnumerateFiles("Data", "*.Frame", SearchOption.AllDirectories))
             {
-                Frame frame = new(File.Open(file, FileMode.Open));
                 string target = file.Replace("\\Cache", "\\Export").Replace(".Frame", ".tga");
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
-
                 string propTarget = file.Replace("\\Cache", "").Replace(".Frame", ".txt");
+
+                FileStream frameFile = File.Open(file, FileMode.Open);
+                FileStream propFile = null;
                 if (File.Exists(propTarget))
                 {
-                    frame.ReadPropertiesFromStream(File.Open(propTarget, FileMode.Open));
+                    propFile = File.Open(propTarget, FileMode.Open);
                 }
-                frame.ToImage().Save(target, tgaEncoder);
-
-                bool? centerHotSpot = null;
-                if (frame.RawList != null)
-                {
-                    RawProperty centerHotSpotProp = frame.RawList.Properties
-                        .FirstOrDefault((property) => property.Name == "Center Hot Spot", null);
-                    centerHotSpot = centerHotSpotProp == null
-                        ? false
-                        : ((string)centerHotSpotProp.Value) == "1";
-                }
+                Frame frame = Frame.FromStream(frameFile, propFile);
+                frame.Texture.Save(target, tgaEncoder);
 
                 string logText = $"{file} " +
-                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
-                    $": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))} " +
-                    $": {centerHotSpot}\n";
+                    //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
+                    //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.Y))} " +
+                    $": {frame.CenterHotSpot}\n";
                 File.AppendAllText("log.txt", logText);
                 Console.Write(logText);
             }
 
             foreach (string file in Directory.EnumerateFiles("Data", "*.Sequence", SearchOption.AllDirectories))
             {
-                Sequence sequence = new(File.Open(file, FileMode.Open));
+                Sequence sequence = Sequence.FromStream(File.Open(file, FileMode.Open));
                 string sequenceName = Path.GetFileNameWithoutExtension(file);
                 string sequenceSimpleName = sequenceName.Replace(" ", "");
                 string target = Path.Combine(Path.GetDirectoryName(file).Replace("\\Cache", "\\Export"), "-" + sequenceName);
                 Directory.CreateDirectory(target);
-                var images = sequence.ToImages();
-                bool? centerHotSpot = null;
-                if (sequence.RawList != null)
-                {
-                    File.WriteAllText($"{target}\\Properties.txt", sequence.RawList.Serialize());
-                    centerHotSpot = ((string)sequence.RawList.Properties
-                        .First((property) => property.Name == "Center Hot Spot").Value) == "1";
-                }
+                var images = sequence.Textures;
+
+                FileStream propertySet = File.Create($"{target}\\Properties.txt");
+                PropertySerializer.Serialize(propertySet, sequence, sequence.Source);
+
                 if (images == null)
                 {
                     continue;
@@ -148,7 +143,8 @@ namespace NuVelocity.Unpacker
                     var image = images[i];
                     image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", tgaEncoder);
                 }
-                string logText = $"{file} : {centerHotSpot}\n";
+
+                string logText = $"{file} : {sequence.CenterHotSpot}, {sequence.Source}\n";
                 File.AppendAllText("log.txt", logText);
                 Console.Write(logText);
             }
