@@ -5,7 +5,7 @@ VisualStudioVersion = 17.6.33829.357
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NuVelocity.Unpacker", "src\NuVelocity.Unpacker.csproj", "{4D0C9445-AB6C-4C99-8F15-3DF6101FC4C3}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NuVelocity.IO", "..\NuVelocity\src\IO\NuVelocity.IO.csproj", "{C0826725-0563-48C4-AF60-6B22491EFED8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NuVelocity", "..\NuVelocity\src\NuVelocity.csproj", "{29E914D9-5E46-4AD6-8E85-C1C2C1FD9F47}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +17,10 @@ Global
 		{4D0C9445-AB6C-4C99-8F15-3DF6101FC4C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4D0C9445-AB6C-4C99-8F15-3DF6101FC4C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4D0C9445-AB6C-4C99-8F15-3DF6101FC4C3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C0826725-0563-48C4-AF60-6B22491EFED8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C0826725-0563-48C4-AF60-6B22491EFED8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C0826725-0563-48C4-AF60-6B22491EFED8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C0826725-0563-48C4-AF60-6B22491EFED8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{29E914D9-5E46-4AD6-8E85-C1C2C1FD9F47}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{29E914D9-5E46-4AD6-8E85-C1C2C1FD9F47}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{29E914D9-5E46-4AD6-8E85-C1C2C1FD9F47}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{29E914D9-5E46-4AD6-8E85-C1C2C1FD9F47}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

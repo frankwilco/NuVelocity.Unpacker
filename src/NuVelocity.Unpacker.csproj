@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\NuVelocity\src\IO\NuVelocity.IO.csproj" />
+    <ProjectReference Include="..\..\NuVelocity\src\NuVelocity.csproj" />
   </ItemGroup>
 
 </Project>
