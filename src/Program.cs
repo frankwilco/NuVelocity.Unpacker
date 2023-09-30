@@ -7,13 +7,13 @@ namespace NuVelocity.Unpacker
 {
     internal class Program
     {
-        static TgaEncoder tgaEncoder => new()
+        private static TgaEncoder TgaEncoder => new()
         {
             BitsPerPixel = TgaBitsPerPixel.Pixel32,
             Compression = TgaCompression.RunLength
         };
 
-        static void TestFrame()
+        private static void TestFrame()
         {
             foreach (string file in Directory.EnumerateFiles("Tests", "*.Frame", SearchOption.AllDirectories))
             {
@@ -32,7 +32,7 @@ namespace NuVelocity.Unpacker
                 {
                     File.WriteAllBytes($"{target}_rawMask", maskData);
                 }
-                frame.Texture.Save(target + "tga", tgaEncoder);
+                frame.Texture.Save(target + "tga", TgaEncoder);
                 frame.Texture.SaveAsPng(target + "png");
                 string logText = $"{file} " +
                     //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
@@ -42,7 +42,7 @@ namespace NuVelocity.Unpacker
             }
         }
 
-        static void TestSequence()
+        private static void TestSequence()
         {
             foreach (string file in Directory.EnumerateFiles("Tests", "*.Sequence", SearchOption.AllDirectories))
             {
@@ -80,14 +80,14 @@ namespace NuVelocity.Unpacker
                 var images = b.Textures;
                 for (int i = 0; i < images.Length; i++)
                 {
-                    images[i].Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", tgaEncoder);
+                    images[i].Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
                     images[i].SaveAsPng($"{target}\\{sequenceSimpleName}{i:0000}.png");
                 }
                 Console.WriteLine($"{file} - {b.Source}");
             }
         }
 
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             //TestFrame();
             //TestSequence();
@@ -112,7 +112,7 @@ namespace NuVelocity.Unpacker
                     propFile = File.Open(propTarget, FileMode.Open);
                 }
                 Frame frame = Frame.FromStream(frameFile, propFile);
-                frame.Texture.Save(target, tgaEncoder);
+                frame.Texture.Save(target, TgaEncoder);
 
                 string logText = $"{file} " +
                     //$": {BitConverter.ToString(BitConverter.GetBytes(frame.Offset.X))} " +
@@ -141,7 +141,7 @@ namespace NuVelocity.Unpacker
                 for (int i = 0; i < images.Length; i++)
                 {
                     var image = images[i];
-                    image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", tgaEncoder);
+                    image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
                 }
 
                 string logText = $"{file} : {sequence.CenterHotSpot}, {sequence.Source}\n";
