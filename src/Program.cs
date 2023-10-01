@@ -1,7 +1,7 @@
 ﻿using SixLabors.ImageSharp.Formats.Tga;
 using System.IO;
-using NuVelocity.IO;
 using System.Diagnostics;
+using NuVelocity.Text;
 
 namespace NuVelocity.Unpacker
 {
@@ -19,12 +19,26 @@ namespace NuVelocity.Unpacker
                 "Tests", "*.Frame", SearchOption.AllDirectories);
             Parallel.ForEach(frameFiles, (file) =>
             {
+                string target = file.Replace(".Frame", ".");
+
+                string propTarget = target + "txt";
+                FileStream propFile = null;
+                if (File.Exists(propTarget))
+                {
+                    propFile = File.Open(propTarget, FileMode.Open);
+                }
+
                 Frame frame = Frame.FromStream(
                     out byte[] imageData,
                     out byte[] maskData,
-                    File.Open(file, FileMode.Open));
-                string target = file.Replace(".Frame", ".");
+                    File.Open(file, FileMode.Open),
+                    propFile);
                 Directory.CreateDirectory(Path.GetDirectoryName(target));
+
+                PropertySerializer.Serialize(
+                    File.Open(target + "rex.txt", FileMode.Create),
+                    frame,
+                    frame.Source);
 
                 if (imageData != null)
                 {
