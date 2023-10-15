@@ -131,9 +131,16 @@ namespace NuVelocity.Unpacker
                     propFile = File.Open(propTarget, FileMode.Open);
                 }
                 Frame frame = Frame.FromStream(frameFile, propFile);
-                frame.Texture.Save(target, TgaEncoder);
-
-                string logText = $"{file} : {frame.CenterHotSpot}\n";
+                string logText = file;
+                if (frame == null)
+                {
+                    logText += $" : FAIL\n";
+                }
+                else
+                {
+                    frame.Texture.Save(target, TgaEncoder);
+                    logText += $" : {frame.CenterHotSpot}\n";
+                }
                 logs.Add(logText);
                 Console.Write(logText);
             });
