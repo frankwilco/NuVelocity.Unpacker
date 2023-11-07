@@ -156,6 +156,14 @@ namespace NuVelocity.Unpacker
                 Directory.CreateDirectory(target);
                 var images = sequence.Textures;
 
+                // XXX: override blended with black property and blit type if
+                // it uses black biased blitting (which we don't support yet).
+                sequence.BlendedWithBlack = false;
+                if (sequence.BlitType == BlitType.BlendBlackBias)
+                {
+                    sequence.BlitType = BlitType.TransparentMask;
+                }
+
                 FileStream propertySet = File.Create($"{target}\\Properties.txt");
                 PropertySerializer.Serialize(propertySet, sequence, sequence.Source);
 
