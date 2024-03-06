@@ -2,6 +2,7 @@
 using System.IO;
 using System.Diagnostics;
 using NuVelocity.Text;
+using SixLabors.ImageSharp;
 
 namespace NuVelocity.Unpacker
 {
