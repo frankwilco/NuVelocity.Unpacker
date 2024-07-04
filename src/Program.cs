@@ -121,15 +121,18 @@ namespace NuVelocity.Unpacker
 
         private static void Main(string[] args)
         {
-            //TestFrame();
-            //TestSequence();
-            //TestSequenceRepack();
-            //return;
             if (File.Exists("2.txt"))
             {
                 _encoderFormat = EncoderFormat.Mode2;
                 _frameExtension = ".frm16";
                 _seqExtension = ".seq16";
+            }
+            
+            if (File.Exists("1test.txt"))
+            {
+                TestFrame();
+                TestSequence();
+                return;
             }
 
             if (File.Exists("log.txt"))
