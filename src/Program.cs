@@ -1,56 +1,70 @@
 ﻿using SixLabors.ImageSharp.Formats.Tga;
-using System.IO;
-using System.Diagnostics;
 using NuVelocity.Text;
 using SixLabors.ImageSharp;
+using NuVelocity.Graphics;
 
 namespace NuVelocity.Unpacker
 {
     internal class Program
     {
+        private static EncoderFormat _encoderFormat = EncoderFormat.Mode3;
+        private static string _frameExtension = ".Frame";
+        private static string _seqExtension = ".Sequence";
+
         private static TgaEncoder TgaEncoder => new()
         {
             BitsPerPixel = TgaBitsPerPixel.Pixel32,
             Compression = TgaCompression.RunLength
         };
 
+        private static string GetDirectoryNameWithFallback(string? path)
+        {
+            string? directoryName = Path.GetDirectoryName(path);
+            if (string.IsNullOrWhiteSpace(directoryName))
+            {
+                return DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+            }
+            return directoryName;
+        }
+
         private static void TestFrame()
         {
             var frameFiles = Directory.EnumerateFiles(
-                "Tests", "*.Frame", SearchOption.AllDirectories);
+                "Tests", "*" + _frameExtension, SearchOption.AllDirectories);
             Parallel.ForEach(frameFiles, (file) =>
             {
-                string target = file.Replace(".Frame", ".");
+                string target = file.Replace(_frameExtension, ".");
 
                 string propTarget = target + "txt";
-                FileStream propFile = null;
+                FileStream? propFile = null;
                 if (File.Exists(propTarget))
                 {
                     propFile = File.Open(propTarget, FileMode.Open);
                 }
 
-                Frame frame = Frame.FromStream(
-                    out byte[] imageData,
-                    out byte[] maskData,
+                SlisFrameEncoder encoder = new(
+                    _encoderFormat,
                     File.Open(file, FileMode.Open),
                     propFile);
-                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                SlisFrame frame = encoder.SlisFrame;
 
                 PropertySerializer.Serialize(
-                    File.Open(target + "rex.txt", FileMode.Create),
+                    File.Open(target + "txt", FileMode.Create),
                     frame,
-                    frame.Source);
+                    frame.Flags);
 
-                if (imageData != null)
+                for (int i = 0; i < encoder.LayerCount; i++)
                 {
-                    File.WriteAllBytes($"{target}_data", imageData);
+                    byte[]? layer = encoder.LayerData?[i];
+                    if (layer == null)
+                    {
+                        continue;
+                    }
+                    File.WriteAllBytes($"{target}_layer{i}", layer);
                 }
-                if (maskData != null)
-                {
-                    File.WriteAllBytes($"{target}_rawMask", maskData);
-                }
-                frame.Texture.Save(target + "tga", TgaEncoder);
-                frame.Texture.SaveAsPng(target + "png");
+
+                frame?.Texture?.Save(target + "tga", TgaEncoder);
+                frame?.Texture?.SaveAsPng(target + "png");
                 string logText = $"{file}\n";
                 Console.Write(logText);
             });
@@ -59,47 +73,49 @@ namespace NuVelocity.Unpacker
         private static void TestSequence()
         {
             var sequenceFiles = Directory.EnumerateFiles(
-                "Tests", "*.Sequence", SearchOption.AllDirectories);
+                "Tests", "*" + _seqExtension, SearchOption.AllDirectories);
             Parallel.ForEach(sequenceFiles, (file) =>
             {
-                var sequence = Sequence.FromStream(
-                    out byte[] lists,
-                    out byte[] rawImage,
-                    out byte[] maskData,
-                    out Image spritesheet,
-                    File.Open(file, FileMode.Open));
+                SlisSequenceEncoder encoder = new(
+                    _encoderFormat,
+                    File.Open(file, FileMode.Open),
+                    null);
+                SlisSequence sequence = encoder.SlisSequence;
+
                 string sequenceName = Path.GetFileNameWithoutExtension(file);
-                string target = Path.Combine(Path.GetDirectoryName(file), "-" + sequenceName);
+                string target = Path.Combine(
+                    GetDirectoryNameWithFallback(file),
+                    $"-{sequenceName}");
                 Directory.CreateDirectory(target);
 
                 FileStream propFile = File.Create($"{target}\\Properties.txt");
-                PropertySerializer.Serialize(propFile, sequence, sequence.Source);
+                PropertySerializer.Serialize(propFile, sequence, sequence.Flags);
 
-                if (lists != null)
+                if (encoder.ListData != null)
                 {
-                    File.WriteAllBytes($"{target}\\_lists", lists);
+                    File.WriteAllBytes($"{target}\\_lists", encoder.ListData);
                 }
-                if (rawImage != null)
+                if (encoder.ImageData1 != null)
                 {
-                    File.WriteAllBytes($"{target}\\_rawImage", rawImage);
+                    File.WriteAllBytes($"{target}\\_rawImage", encoder.ImageData1);
                 }
-                if (maskData != null)
+                if (encoder.ImageData2 != null)
                 {
-                    File.WriteAllBytes($"{target}\\_rawMask", maskData);
+                    File.WriteAllBytes($"{target}\\_rawMask", encoder.ImageData2);
                 }
-                if (spritesheet != null)
-                {
-                    spritesheet.SaveAsPng($"{target}\\_atlas.png");
-                }
+                encoder.Spritesheet?.SaveAsPng($"{target}\\_atlas.png");
 
                 string sequenceSimpleName = sequenceName.Replace(" ", "");
-                var images = sequence.Textures;
-                for (int i = 0; i < images.Length; i++)
+                Image[]? images = sequence.Textures;
+                if (images != null)
                 {
-                    images[i].Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
-                    images[i].SaveAsPng($"{target}\\{sequenceSimpleName}{i:0000}.png");
+                    for (int i = 0; i < images.Length; i++)
+                    {
+                        images[i].Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
+                        images[i].SaveAsPng($"{target}\\{sequenceSimpleName}{i:0000}.png");
+                    }
                 }
-                Console.WriteLine($"{file} - {sequence.Source}");
+                Console.WriteLine($"{file} - {sequence.Flags}");
             });
         }
 
@@ -109,6 +125,12 @@ namespace NuVelocity.Unpacker
             //TestSequence();
             //TestSequenceRepack();
             //return;
+            if (File.Exists("2.txt"))
+            {
+                _encoderFormat = EncoderFormat.Mode2;
+                _frameExtension = ".frm16";
+                _seqExtension = ".seq16";
+            }
 
             if (File.Exists("log.txt"))
             {
@@ -118,20 +140,21 @@ namespace NuVelocity.Unpacker
             List<string> logs = new();
 
             var frameFiles = Directory.EnumerateFiles(
-                "Data", "*.Frame", SearchOption.AllDirectories);
+                "Data", "*" + _frameExtension, SearchOption.AllDirectories);
             Parallel.ForEach(frameFiles, (file) =>
             {
-                string target = file.Replace("\\Cache", "\\Export").Replace(".Frame", ".tga");
-                Directory.CreateDirectory(Path.GetDirectoryName(target));
-                string propTarget = file.Replace("\\Cache", "").Replace(".Frame", ".txt");
+                string target = file.Replace("\\Cache", "\\Export").Replace(_frameExtension, ".tga");
+                Directory.CreateDirectory(GetDirectoryNameWithFallback(target));
+                string propTarget = file.Replace("\\Cache", "").Replace(_frameExtension, ".txt");
 
                 FileStream frameFile = File.Open(file, FileMode.Open);
-                FileStream propFile = null;
+                FileStream? propFile = null;
                 if (File.Exists(propTarget))
                 {
                     propFile = File.Open(propTarget, FileMode.Open);
                 }
-                Frame frame = Frame.FromStream(frameFile, propFile);
+                SlisFrameEncoder encoder = new(_encoderFormat, frameFile, propFile);
+                SlisFrame frame = encoder.SlisFrame;
                 string logText = file;
                 if (frame == null)
                 {
@@ -139,21 +162,28 @@ namespace NuVelocity.Unpacker
                 }
                 else
                 {
-                    frame.Texture.Save(target, TgaEncoder);
-                    logText += $" : {frame.CenterHotSpot}\n";
+                    frame?.Texture?.Save(target, TgaEncoder);
+                    logText += $" : {frame?.CenterHotSpot}, {frame?.Flags}\n";
                 }
                 logs.Add(logText);
                 Console.Write(logText);
             });
 
             var sequenceFiles = Directory.EnumerateFiles(
-                "Data", "*.Sequence", SearchOption.AllDirectories);
+                "Data", "*" + _seqExtension, SearchOption.AllDirectories);
             Parallel.ForEach(sequenceFiles, (file) =>
             {
-                Sequence sequence = Sequence.FromStream(File.Open(file, FileMode.Open));
+                SlisSequenceEncoder encoder = new(
+                    _encoderFormat,
+                    File.Open(file, FileMode.Open),
+                    null);
+                SlisSequence sequence = encoder.SlisSequence;
                 string sequenceName = Path.GetFileNameWithoutExtension(file);
                 string sequenceSimpleName = sequenceName.Replace(" ", "");
-                string target = Path.Combine(Path.GetDirectoryName(file).Replace("\\Cache", "\\Export"), "-" + sequenceName);
+                string target = Path.Combine(
+                    GetDirectoryNameWithFallback(file).Replace(
+                        "\\Cache", "\\Export"),
+                    "-" + sequenceName);
                 Directory.CreateDirectory(target);
                 var images = sequence.Textures;
 
@@ -166,7 +196,7 @@ namespace NuVelocity.Unpacker
                 }
 
                 FileStream propertySet = File.Create($"{target}\\Properties.txt");
-                PropertySerializer.Serialize(propertySet, sequence, sequence.Source);
+                PropertySerializer.Serialize(propertySet, sequence, sequence.Flags);
 
                 if (images == null)
                 {
@@ -178,7 +208,7 @@ namespace NuVelocity.Unpacker
                     image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
                 }
 
-                string logText = $"{file} : {sequence.CenterHotSpot}, {sequence.Source}\n";
+                string logText = $"{file} : {sequence.CenterHotSpot}, {sequence.Flags}\n";
                 logs.Add(logText);
                 Console.Write(logText);
             });
