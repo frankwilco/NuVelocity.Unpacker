@@ -2,6 +2,7 @@
 using NuVelocity.Text;
 using SixLabors.ImageSharp;
 using NuVelocity.Graphics;
+using System.CommandLine;
 
 namespace NuVelocity.Unpacker;
 
@@ -119,22 +120,8 @@ internal class Program
         });
     }
 
-    private static void Main(string[] args)
+    private static void ExportData(bool overrideBlackBlending)
     {
-        if (File.Exists("2.txt"))
-        {
-            _encoderFormat = EncoderFormat.Mode2;
-            _frameExtension = ".frm16";
-            _seqExtension = ".seq16";
-        }
-        
-        if (File.Exists("1test.txt"))
-        {
-            TestFrame();
-            TestSequence();
-            return;
-        }
-
         if (File.Exists("log.txt"))
         {
             File.Delete("log.txt");
@@ -211,10 +198,13 @@ internal class Program
 
             // XXX: override blended with black property and blit type if
             // it uses black biased blitting (which we don't support yet).
-            sequence.BlendedWithBlack = false;
-            if (sequence.BlitType == BlitType.BlendBlackBias)
+            if (overrideBlackBlending)
             {
-                sequence.BlitType = BlitType.TransparentMask;
+                sequence.BlendedWithBlack = false;
+                if (sequence.BlitType == BlitType.BlendBlackBias)
+                {
+                    sequence.BlitType = BlitType.TransparentMask;
+                }
             }
 
             FileStream propertySet = File.Create($"{target}\\Properties.txt");
@@ -238,5 +228,68 @@ internal class Program
         File.WriteAllLines("log.txt", logs);
 
         Console.WriteLine("Done.");
+    }
+
+    private static void HandleRootCommand(EncoderFormat format, bool useTests, bool overrideBlackBlending)
+    {
+        switch (format)
+        {
+            case EncoderFormat.Mode1:
+                _encoderFormat = EncoderFormat.Mode1;
+                _frameExtension = ".frm";
+                _seqExtension = ".seq";
+                break;
+            case EncoderFormat.Mode2:
+                _encoderFormat = EncoderFormat.Mode2;
+                _frameExtension = ".frm16";
+                _seqExtension = ".seq16";
+                break;
+            case EncoderFormat.Mode3:
+                _encoderFormat = EncoderFormat.Mode3;
+                _frameExtension = ".Frame";
+                _seqExtension = ".Sequence";
+                break;
+            default:
+                break;
+        }
+
+        if (useTests)
+        {
+            TestFrame();
+            TestSequence();
+            return;
+        }
+
+        ExportData(overrideBlackBlending);
+    }
+
+    private static async Task<int> Main(string[] args)
+    {
+        var formatOption = new Option<EncoderFormat>(
+            name: "--format",
+            description: "The format to be used when decoding cache files.",
+            getDefaultValue: () => EncoderFormat.Mode3);
+
+        var testOption = new Option<bool>(
+            name: "--test",
+            description: "Use the Tests directory for decoding.",
+            getDefaultValue: () => false);
+
+        var overrideBlackBlendingOption = new Option<bool>(
+            name: "--override-black-blending",
+            description: "Override the blended with black and blend black bias blit type with alternative values.",
+            getDefaultValue: () => false);
+
+        var rootCommand = new RootCommand("NuVelocity Unpacker")
+        {
+            formatOption,
+            testOption,
+            overrideBlackBlendingOption
+        };
+
+        rootCommand.SetHandler(HandleRootCommand,
+            formatOption, testOption, overrideBlackBlendingOption);
+
+        return await rootCommand.InvokeAsync(args);
     }
 }
