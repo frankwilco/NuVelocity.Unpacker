@@ -150,15 +150,24 @@ internal class Program
             Directory.CreateDirectory(GetDirectoryNameWithFallback(target));
             string propTarget = file.Replace("\\Cache", "").Replace(_frameExtension, ".txt");
 
+            string logText = file;
+
             FileStream frameFile = File.Open(file, FileMode.Open);
             FileStream? propFile = null;
             if (File.Exists(propTarget))
             {
                 propFile = File.Open(propTarget, FileMode.Open);
             }
-            SlisFrameEncoder encoder = new(_encoderFormat, frameFile, propFile);
-            SlisFrame frame = encoder.SlisFrame;
-            string logText = file;
+            SlisFrameEncoder? encoder = null;
+            try
+            {
+                encoder = new(_encoderFormat, frameFile, propFile);
+            }
+            catch (NotImplementedException)
+            {
+                logText += " (NOT IMPLEMENTED)";
+            }
+            SlisFrame? frame = encoder?.SlisFrame;
             if (frame == null)
             {
                 logText += $" : FAIL\n";
@@ -176,10 +185,20 @@ internal class Program
             "Data", "*" + _seqExtension, SearchOption.AllDirectories);
         Parallel.ForEach(sequenceFiles, (file) =>
         {
-            SlisSequenceEncoder encoder = new(
-                _encoderFormat,
-                File.Open(file, FileMode.Open),
-                null);
+            string logText = file;
+
+            SlisSequenceEncoder? encoder = null;
+            try
+            {
+                encoder = new(
+                    _encoderFormat,
+                    File.Open(file, FileMode.Open),
+                    null);
+            }
+            catch (NotImplementedException)
+            {
+                logText += " (NOT IMPLEMENTED)";
+            }
             SlisSequence sequence = encoder.SlisSequence;
             string sequenceName = Path.GetFileNameWithoutExtension(file);
             string sequenceSimpleName = sequenceName.Replace(" ", "");
@@ -211,7 +230,7 @@ internal class Program
                 image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
             }
 
-            string logText = $"{file} : {sequence.CenterHotSpot}, {sequence.Flags}\n";
+            logText += $" : {sequence.CenterHotSpot}, {sequence.Flags}\n";
             logs.Add(logText);
             Console.Write(logText);
         });
