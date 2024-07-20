@@ -7,14 +7,11 @@ internal class Program
 {
     private static void HandleRootCommand(EncoderFormat format, bool useTests, bool overrideBlackBlending)
     {
-        ImageExporter exporter = new(format, overrideBlackBlending);
-
-        if (useTests)
-        {
-            exporter.TestFrame();
-            exporter.TestSequence();
-            return;
-        }
+        ImageExporter exporter = useTests
+            ? new ImageExporter(
+                format, true, false, overrideBlackBlending, "Tests", "Tests\\Export")
+            : new ImageExporter(
+                format, false, true, overrideBlackBlending, "Data", "Data\\Export");
 
         exporter.ExportData();
     }

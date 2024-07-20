@@ -1,4 +1,6 @@
-﻿using NuVelocity.Graphics;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using NuVelocity.Graphics;
 using NuVelocity.Graphics.ImageSharp;
 using NuVelocity.Text;
 using SixLabors.ImageSharp;
@@ -10,28 +12,40 @@ internal class ImageExporter
 {
     private readonly EncoderFormat _encoderFormat;
     private readonly string _frameExtension;
-    private readonly string _seqExtension;
-    private readonly TgaEncoder _tgaEncoder;
+    private readonly string _sequenceExtension;
     private readonly bool _overrideBlackBlending;
+    private readonly bool _dumpRawData;
+    private readonly string _inputDataFile;
+    private readonly string _inputDataDirectory;
+    private readonly string? _inputDataCacheDirectory;
+    private readonly string _outputDirectory;
+    private readonly TgaEncoder _tgaEncoder;
+    private readonly StringBuilder _logger;
 
-    public ImageExporter(EncoderFormat format, bool overrideBlackBlending)
+    public ImageExporter(
+        EncoderFormat format,
+        bool dumpRawData,
+        bool stripCacheFromPath,
+        bool overrideBlackBlending,
+        string inputDataFileOrDirectory,
+        string outputFolder)
     {
         switch (format)
         {
             case EncoderFormat.Mode1:
                 _encoderFormat = EncoderFormat.Mode1;
                 _frameExtension = ".frm";
-                _seqExtension = ".seq";
+                _sequenceExtension = ".seq";
                 break;
             case EncoderFormat.Mode2:
                 _encoderFormat = EncoderFormat.Mode2;
                 _frameExtension = ".frm16";
-                _seqExtension = ".seq16";
+                _sequenceExtension = ".seq16";
                 break;
             case EncoderFormat.Mode3:
                 _encoderFormat = EncoderFormat.Mode3;
                 _frameExtension = ".Frame";
-                _seqExtension = ".Sequence";
+                _sequenceExtension = ".Sequence";
                 break;
             default:
                 throw new NotSupportedException();
@@ -43,118 +57,32 @@ internal class ImageExporter
             Compression = TgaCompression.RunLength
         };
 
-        _overrideBlackBlending = overrideBlackBlending;
-    }
+        _inputDataDirectory = "";
+        _inputDataFile = "";
 
-    public void ExportData()
-    {
-        if (File.Exists("log.txt"))
+        if (Directory.Exists(inputDataFileOrDirectory))
         {
-            File.Delete("log.txt");
+            _inputDataDirectory = Path.GetFullPath(inputDataFileOrDirectory);
+            if (stripCacheFromPath)
+            {
+                _inputDataCacheDirectory = Path.Combine(_inputDataDirectory, "Cache");
+            }
+        }
+        else if (File.Exists(inputDataFileOrDirectory))
+        {
+            _inputDataFile = Path.GetFullPath(inputDataFileOrDirectory);
+        }
+        else
+        {
+            throw new ArgumentException(
+                "Input data file or directory does not exist.",
+                nameof(inputDataFileOrDirectory));
         }
 
-        List<string> logs = new();
-
-        var frameFiles = Directory.EnumerateFiles(
-            "Data", "*" + _frameExtension, SearchOption.AllDirectories);
-        Parallel.ForEach(frameFiles, (file) =>
-        {
-            string target = file.Replace("\\Cache", "\\Export").Replace(_frameExtension, ".tga");
-            Directory.CreateDirectory(GetDirectoryNameWithFallback(target));
-            string propTarget = file.Replace("\\Cache", "").Replace(_frameExtension, ".txt");
-
-            string logText = file;
-
-            FileStream frameFile = File.Open(file, FileMode.Open);
-            FileStream? propFile = null;
-            if (File.Exists(propTarget))
-            {
-                propFile = File.Open(propTarget, FileMode.Open);
-            }
-            SlisFrameEncoder? encoder = null;
-            try
-            {
-                encoder = new(_encoderFormat, frameFile, propFile);
-            }
-            catch (NotImplementedException)
-            {
-                logText += " (NOT IMPLEMENTED)";
-            }
-            SlisFrame? frame = encoder?.SlisFrame;
-            if (frame == null)
-            {
-                logText += $" : FAIL\n";
-            }
-            else
-            {
-                frame?.Texture?.Save(target, _tgaEncoder);
-                logText += $" : {frame?.CenterHotSpot}, {frame?.Flags}\n";
-            }
-            logs.Add(logText);
-            Console.Write(logText);
-        });
-
-        var sequenceFiles = Directory.EnumerateFiles(
-            "Data", "*" + _seqExtension, SearchOption.AllDirectories);
-        Parallel.ForEach(sequenceFiles, (file) =>
-        {
-            string logText = file;
-
-            SlisSequenceEncoder? encoder = null;
-            try
-            {
-                encoder = new(
-                    _encoderFormat,
-                    File.Open(file, FileMode.Open),
-                    null);
-
-                SlisSequence sequence = encoder.SlisSequence;
-                string sequenceName = Path.GetFileNameWithoutExtension(file);
-                string sequenceSimpleName = sequenceName.Replace(" ", "");
-                string target = Path.Combine(
-                    GetDirectoryNameWithFallback(file).Replace(
-                        "\\Cache", "\\Export"),
-                    "-" + sequenceName);
-                Directory.CreateDirectory(target);
-                var images = sequence.Textures;
-
-                // XXX: override blended with black property and blit type if
-                // it uses black biased blitting (which we don't support yet).
-                if (_overrideBlackBlending)
-                {
-                    sequence.BlendedWithBlack = false;
-                    if (sequence.BlitType == BlitType.BlendBlackBias)
-                    {
-                        sequence.BlitType = BlitType.TransparentMask;
-                    }
-                }
-
-                FileStream propertySet = File.Create($"{target}\\Properties.txt");
-                PropertySerializer.Serialize(propertySet, sequence, sequence.Flags);
-
-                if (images == null)
-                {
-                    return;
-                }
-                for (int i = 0; i < images.Length; i++)
-                {
-                    var image = images[i];
-                    image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", _tgaEncoder);
-                }
-
-                logText += $" : {sequence.CenterHotSpot}, {sequence.Flags}\n";
-            }
-            catch (NotImplementedException)
-            {
-                logText += " (NOT IMPLEMENTED)";
-            }
-            logs.Add(logText);
-            Console.Write(logText);
-        });
-
-        File.WriteAllLines("log.txt", logs);
-
-        Console.WriteLine("Done.");
+        _dumpRawData = dumpRawData;
+        _overrideBlackBlending = overrideBlackBlending;
+        _outputDirectory = Path.GetFullPath(outputFolder);
+        _logger = new();
     }
 
     private static string GetDirectoryNameWithFallback(string? path)
@@ -167,95 +95,213 @@ internal class ImageExporter
         return directoryName;
     }
 
-    public void TestFrame()
+    private void ExportFromFrameFile(string file)
     {
-        var frameFiles = Directory.EnumerateFiles(
-            "Tests", "*" + _frameExtension, SearchOption.AllDirectories);
-        Parallel.ForEach(frameFiles, (file) =>
+        string parentPath = file;
+        if (_inputDataCacheDirectory != null)
         {
-            string target = file.Replace(_frameExtension, ".");
+            parentPath = parentPath.Replace(_inputDataCacheDirectory, _inputDataDirectory);
+        }
+        string exportPath = parentPath.Replace(_inputDataDirectory, _outputDirectory);
+        Directory.CreateDirectory(GetDirectoryNameWithFallback(exportPath));
+        exportPath = exportPath.Replace(_frameExtension, "");
 
-            string propTarget = target + "txt";
-            FileStream? propFile = null;
-            if (File.Exists(propTarget))
+        Stream? propertyListFile = null;
+        string[] framePropertyListSearchPaths = new string[]
+        {
+            parentPath.Replace(_frameExtension, ".txt"),
+            file.Replace(_frameExtension, ".txt"),
+            exportPath + ".txt"
+        };
+        foreach (string searchPath in framePropertyListSearchPaths)
+        {
+            if (File.Exists(searchPath))
             {
-                propFile = File.Open(propTarget, FileMode.Open);
+                propertyListFile = File.Open(searchPath, FileMode.Open);
+                break;
             }
+        }
 
-            SlisFrameEncoder encoder = new(
-                _encoderFormat,
-                File.Open(file, FileMode.Open),
-                propFile);
-            SlisFrame frame = encoder.SlisFrame;
-
-            PropertySerializer.Serialize(
-                File.Open(target + "txt", FileMode.Create),
-                frame,
-                frame.Flags);
-
-            for (int i = 0; i < encoder.LayerCount; i++)
-            {
-                byte[]? layer = encoder.LayerData?[i];
-                if (layer == null)
-                {
-                    continue;
-                }
-                File.WriteAllBytes($"{target}_layer{i}", layer);
-            }
-
-            frame?.Texture?.Save(target + "tga", _tgaEncoder);
-            frame?.Texture?.SaveAsPng(target + "png");
-            string logText = $"{file}\n";
-            Console.Write(logText);
-        });
+        Stream frameFile = File.Open(file, FileMode.Open);
+        ExportFromFrameStream(file, exportPath, frameFile, propertyListFile);
     }
 
-    public void TestSequence()
+    private void ExportFromFrameStream(
+        string sourcePath,
+        string exportPath,
+        Stream frameStream,
+        Stream? propertyListStream)
     {
-        var sequenceFiles = Directory.EnumerateFiles(
-            "Tests", "*" + _seqExtension, SearchOption.AllDirectories);
-        Parallel.ForEach(sequenceFiles, (file) =>
+        string logLine = sourcePath;
+        SlisFrameEncoder? encoder = null;
+        try
         {
-            SlisSequenceEncoder encoder = new(
-                _encoderFormat,
-                File.Open(file, FileMode.Open),
-                null);
-            SlisSequence sequence = encoder.SlisSequence;
+            encoder = new(_encoderFormat, frameStream, propertyListStream);
+            logLine += ",1";
+        }
+        catch (NotImplementedException)
+        {
+            logLine += ",0";
+        }
 
-            string sequenceName = Path.GetFileNameWithoutExtension(file);
-            string target = Path.Combine(
-                GetDirectoryNameWithFallback(file),
-                $"-{sequenceName}");
-            Directory.CreateDirectory(target);
+        SlisFrame? frame = encoder?.SlisFrame;
+        if (encoder == null || frame == null)
+        {
+            logLine += ",fail,fail";
+        }
+        else
+        {
+            if (_dumpRawData)
+            {
+                PropertySerializer.Serialize(
+                    File.Open($"{exportPath}.dmp.txt", FileMode.Create),
+                    frame,
+                    frame.Flags);
 
-            FileStream propFile = File.Create($"{target}\\Properties.txt");
-            PropertySerializer.Serialize(propFile, sequence, sequence.Flags);
-
-            if (encoder.ListData != null)
-            {
-                File.WriteAllBytes($"{target}\\_lists", encoder.ListData);
-            }
-            if (encoder.ImageData1 != null)
-            {
-                File.WriteAllBytes($"{target}\\_rawImage", encoder.ImageData1);
-            }
-            if (encoder.ImageData2 != null)
-            {
-                File.WriteAllBytes($"{target}\\_rawMask", encoder.ImageData2);
-            }
-            encoder.Spritesheet?.SaveAsPng($"{target}\\_atlas.png");
-
-            string sequenceSimpleName = sequenceName.Replace(" ", "");
-            Image[]? images = sequence.Textures;
-            if (images != null)
-            {
-                for (int i = 0; i < images.Length; i++)
+                for (int i = 0; i < encoder.LayerCount; i++)
                 {
-                    images[i].Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", _tgaEncoder);
-                    images[i].SaveAsPng($"{target}\\{sequenceSimpleName}{i:0000}.png");
+                    byte[]? layer = encoder.LayerData?[i];
+                    if (layer == null)
+                    {
+                        continue;
+                    }
+                    File.WriteAllBytes($"{exportPath}_layer{i}", layer);
                 }
             }
-            Console.WriteLine($"{file} - {sequence.Flags}");
-        });
+
+            frame.Texture?.Save($"{exportPath}.tga", _tgaEncoder);
+            logLine += $",{frame.CenterHotSpot},\"{frame.Flags}\"";
+        }
+
+        _logger.AppendLine(logLine);
+        Console.WriteLine(logLine);
+    }
+
+    private void ExportFromSequenceFile(string file)
+    {
+        string sequenceName = Path.GetFileNameWithoutExtension(file);
+        string parentPath = file;
+        if (_inputDataCacheDirectory != null)
+        {
+            parentPath = parentPath.Replace(_inputDataCacheDirectory, _inputDataDirectory);
+        }
+        string exportPath = Path.Combine(
+            GetDirectoryNameWithFallback(parentPath)
+                .Replace(_inputDataDirectory, _outputDirectory),
+            "-" + sequenceName);
+        Directory.CreateDirectory(exportPath);
+        FileStream sequenceStream = File.Open(file, FileMode.Open);
+        ExportFromSequenceStream(file, exportPath, sequenceStream, sequenceName.Replace(" ", ""));
+    }
+
+    private void ExportFromSequenceStream(
+        string sourcePath,
+        string exportPath,
+        Stream sequenceStream,
+        string sequenceName)
+    {
+        string logLine = sourcePath;
+        SlisSequenceEncoder? encoder = null;
+        try
+        {
+            encoder = new(
+                _encoderFormat,
+                sequenceStream,
+                null);
+            logLine += ",1";
+        }
+        catch (NotImplementedException)
+        {
+            logLine += ",0";
+        }
+
+        if (encoder == null || encoder.Sequence == null)
+        {
+            logLine += ",fail,fail";
+        }
+        else
+        {
+            if (_dumpRawData)
+            {
+                if (encoder.ListData != null)
+                {
+                    File.WriteAllBytes($"{exportPath}\\_lists", encoder.ListData);
+                }
+                if (encoder.ImageData1 != null)
+                {
+                    File.WriteAllBytes($"{exportPath}\\_rawImage", encoder.ImageData1);
+                }
+                if (encoder.ImageData2 != null)
+                {
+                    File.WriteAllBytes($"{exportPath}\\_rawMask", encoder.ImageData2);
+                }
+                encoder.Spritesheet?.Save($"{exportPath}\\_atlas.tga", _tgaEncoder);
+            }
+
+            SlisSequence sequence = encoder.SlisSequence;
+
+            // XXX: override blended with black property and blit type if
+            // it uses black biased blitting (which we don't support yet).
+            if (_overrideBlackBlending)
+            {
+                sequence.BlendedWithBlack = false;
+                if (sequence.BlitType == BlitType.BlendBlackBias)
+                {
+                    sequence.BlitType = BlitType.TransparentMask;
+                }
+            }
+
+            FileStream propertySet = File.Create($"{exportPath}\\Properties.txt");
+            PropertySerializer.Serialize(propertySet, sequence, sequence.Flags);
+
+            if (sequence.Textures != null)
+            {
+                for (int i = 0; i < sequence.Textures.Length; i++)
+                {
+                    Image image = sequence.Textures[i];
+                    image.Save(
+                        $"{exportPath}\\{sequenceName}{i:0000}.tga",
+                        _tgaEncoder);
+                }
+            }
+
+            logLine += $",{sequence.CenterHotSpot},\"{sequence.Flags}\"";
+        }
+
+        _logger.AppendLine(logLine);
+        Console.WriteLine(logLine);
+    }
+
+    public void ExportData()
+    {
+        if (File.Exists("log.txt"))
+        {
+            File.Delete("log.txt");
+        }
+
+        _logger.Clear();
+
+        if (!string.IsNullOrWhiteSpace(_inputDataDirectory))
+        {
+            IEnumerable<string> frameFiles = Directory.EnumerateFiles(
+                _inputDataDirectory,
+                "*" + _frameExtension,
+               SearchOption.AllDirectories);
+            Parallel.ForEach(frameFiles, ExportFromFrameFile);
+
+            IEnumerable<string> sequenceFiles = Directory.EnumerateFiles(
+                _inputDataDirectory,
+                "*" + _sequenceExtension,
+                SearchOption.AllDirectories);
+            Parallel.ForEach(sequenceFiles, ExportFromSequenceFile);
+        }
+        else
+        {
+            throw new NotImplementedException();
+        }
+
+        File.WriteAllText("log.csv", _logger.ToString());
+
+        Console.WriteLine("Done.");
     }
 }
