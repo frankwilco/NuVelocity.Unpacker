@@ -1,0 +1,28 @@
+{
+  "profiles": {
+    "Mode 3": {
+      "commandName": "Project",
+      "commandLineArgs": "--format Mode3"
+    },
+    "Mode 2": {
+      "commandName": "Project",
+      "commandLineArgs": "--format Mode2"
+    },
+    "Mode 1": {
+      "commandName": "Project",
+      "commandLineArgs": "--format Mode1"
+    },
+    "Mode 3 - Test": {
+      "commandName": "Project",
+      "commandLineArgs": "--format Mode3 --test"
+    },
+    "Mode 2 - Test": {
+      "commandName": "Project",
+      "commandLineArgs": "--format Mode2 --test"
+    },
+    "Mode 1 - Test": {
+      "commandName": "Project",
+      "commandLineArgs": "--format Mode1 --test"
+    }
+  }
+}
