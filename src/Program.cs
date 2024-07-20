@@ -182,46 +182,47 @@ internal class Program
                     _encoderFormat,
                     File.Open(file, FileMode.Open),
                     null);
+
+                SlisSequence sequence = encoder.SlisSequence;
+                string sequenceName = Path.GetFileNameWithoutExtension(file);
+                string sequenceSimpleName = sequenceName.Replace(" ", "");
+                string target = Path.Combine(
+                    GetDirectoryNameWithFallback(file).Replace(
+                        "\\Cache", "\\Export"),
+                    "-" + sequenceName);
+                Directory.CreateDirectory(target);
+                var images = sequence.Textures;
+
+                // XXX: override blended with black property and blit type if
+                // it uses black biased blitting (which we don't support yet).
+                if (overrideBlackBlending)
+                {
+                    sequence.BlendedWithBlack = false;
+                    if (sequence.BlitType == BlitType.BlendBlackBias)
+                    {
+                        sequence.BlitType = BlitType.TransparentMask;
+                    }
+                }
+
+                FileStream propertySet = File.Create($"{target}\\Properties.txt");
+                PropertySerializer.Serialize(propertySet, sequence, sequence.Flags);
+
+                if (images == null)
+                {
+                    return;
+                }
+                for (int i = 0; i < images.Length; i++)
+                {
+                    var image = images[i];
+                    image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
+                }
+
+                logText += $" : {sequence.CenterHotSpot}, {sequence.Flags}\n";
             }
             catch (NotImplementedException)
             {
                 logText += " (NOT IMPLEMENTED)";
             }
-            SlisSequence sequence = encoder.SlisSequence;
-            string sequenceName = Path.GetFileNameWithoutExtension(file);
-            string sequenceSimpleName = sequenceName.Replace(" ", "");
-            string target = Path.Combine(
-                GetDirectoryNameWithFallback(file).Replace(
-                    "\\Cache", "\\Export"),
-                "-" + sequenceName);
-            Directory.CreateDirectory(target);
-            var images = sequence.Textures;
-
-            // XXX: override blended with black property and blit type if
-            // it uses black biased blitting (which we don't support yet).
-            if (overrideBlackBlending)
-            {
-                sequence.BlendedWithBlack = false;
-                if (sequence.BlitType == BlitType.BlendBlackBias)
-                {
-                    sequence.BlitType = BlitType.TransparentMask;
-                }
-            }
-
-            FileStream propertySet = File.Create($"{target}\\Properties.txt");
-            PropertySerializer.Serialize(propertySet, sequence, sequence.Flags);
-
-            if (images == null)
-            {
-                return;
-            }
-            for (int i = 0; i < images.Length; i++)
-            {
-                var image = images[i];
-                image.Save($"{target}\\{sequenceSimpleName}{i:0000}.tga", TgaEncoder);
-            }
-
-            logText += $" : {sequence.CenterHotSpot}, {sequence.Flags}\n";
             logs.Add(logText);
             Console.Write(logText);
         });
