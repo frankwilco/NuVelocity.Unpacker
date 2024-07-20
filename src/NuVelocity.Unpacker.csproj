@@ -8,12 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SharpZipLib" Version="1.4.2" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\NuVelocity.SharpZipLib\src\ICSharpCode.SharpZipLib\ICSharpCode.SharpZipLib.csproj" />
+    <ProjectReference Include="..\..\NuVelocity\src\Graphics\ImageSharp\NuVelocity.Graphics.ImageSharp.csproj" />
     <ProjectReference Include="..\..\NuVelocity\src\NuVelocity.csproj" />
   </ItemGroup>
 

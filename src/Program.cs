@@ -1,8 +1,9 @@
-﻿using SixLabors.ImageSharp.Formats.Tga;
+﻿using System.CommandLine;
+using NuVelocity.Graphics;
+using NuVelocity.Graphics.ImageSharp;
 using NuVelocity.Text;
 using SixLabors.ImageSharp;
-using NuVelocity.Graphics;
-using System.CommandLine;
+using SixLabors.ImageSharp.Formats.Tga;
 
 namespace NuVelocity.Unpacker;
 
