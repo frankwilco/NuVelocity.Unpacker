@@ -107,10 +107,17 @@ internal class ImageExporter
         string frameName)
     {
         string logLine = sourcePath;
-        SlisFrameEncoder? encoder = null;
+        FrameEncoder? encoder = null;
         try
         {
-            encoder = new(_encoderFormat, frameStream, propertyListStream);
+            encoder = _encoderFormat switch
+            {
+                EncoderFormat.Mode1 => throw new NotImplementedException(),
+                EncoderFormat.Mode2 => new Mode2FrameEncoder(),
+                EncoderFormat.Mode3 => new Mode3FrameEncoder(),
+                _ => throw new InvalidOperationException(),
+            };
+            encoder.Decode(frameStream, propertyListStream, true);
             logLine += ",1";
         }
         catch (NotImplementedException)
@@ -118,7 +125,7 @@ internal class ImageExporter
             logLine += ",0";
         }
 
-        SlisFrame? frame = encoder?.SlisFrame;
+        Frame? frame = encoder?.Frame;
         if (encoder == null || frame == null)
         {
             logLine += ",fail,fail";
@@ -144,7 +151,14 @@ internal class ImageExporter
                 }
             }
 
-            frame.Texture?.Save($"{finalExportPath}.tga", _tgaEncoder);
+            using Image? image = _encoderFormat switch
+            {
+                EncoderFormat.Mode1 => throw new NotImplementedException(),
+                EncoderFormat.Mode2 => ((Mode2FrameEncoder)encoder).ToImage(),
+                EncoderFormat.Mode3 => ((Mode3FrameEncoder)encoder).ToImage(),
+                _ => throw new InvalidOperationException(),
+            };
+            image?.Save($"{finalExportPath}.tga", _tgaEncoder);
             logLine += $",{frame.CenterHotSpot},\"{frame.Flags}\"";
         }
 
@@ -159,13 +173,17 @@ internal class ImageExporter
         string sequenceName)
     {
         string logLine = sourcePath;
-        SlisSequenceEncoder? encoder = null;
+        SequenceEncoder? encoder = null;
         try
         {
-            encoder = new(
-                _encoderFormat,
-                sequenceStream,
-                null);
+            encoder = _encoderFormat switch
+            {
+                EncoderFormat.Mode1 => throw new NotImplementedException(),
+                EncoderFormat.Mode2 => new Mode2SequenceEncoder(),
+                EncoderFormat.Mode3 => new Mode3SequenceEncoder(),
+                _ => throw new InvalidOperationException(),
+            };
+            encoder.Decode(sequenceStream, null, true);
             logLine += ",1";
         }
         catch (NotImplementedException)
@@ -185,22 +203,26 @@ internal class ImageExporter
             Directory.CreateDirectory(finalExportPath);
             if (_dumpRawData)
             {
-                if (encoder.ListData != null)
+                if (_encoderFormat == EncoderFormat.Mode3)
                 {
-                    File.WriteAllBytes($"{finalExportPath}_lists", encoder.ListData);
+                    Mode3SequenceEncoder mode3Encoder = (Mode3SequenceEncoder)encoder;
+                    if (mode3Encoder.ListData != null)
+                    {
+                        File.WriteAllBytes($"{finalExportPath}_lists", mode3Encoder.ListData);
+                    }
+                    if (mode3Encoder.ImageData != null)
+                    {
+                        File.WriteAllBytes($"{finalExportPath}_rawImage", mode3Encoder.ImageData);
+                    }
+                    if (mode3Encoder.AlphaChannelData != null)
+                    {
+                        File.WriteAllBytes($"{finalExportPath}_rawMask", mode3Encoder.AlphaChannelData);
+                    }
+                    mode3Encoder.ToSpriteAtlasImage()?.Save($"{finalExportPath}_atlas.tga", _tgaEncoder);
                 }
-                if (encoder.ImageData1 != null)
-                {
-                    File.WriteAllBytes($"{finalExportPath}_rawImage", encoder.ImageData1);
-                }
-                if (encoder.ImageData2 != null)
-                {
-                    File.WriteAllBytes($"{finalExportPath}_rawMask", encoder.ImageData2);
-                }
-                encoder.Spritesheet?.Save($"{finalExportPath}_atlas.tga", _tgaEncoder);
             }
 
-            SlisSequence sequence = encoder.SlisSequence;
+            Sequence sequence = encoder.Sequence;
 
             // XXX: override blended with black property and blit type if
             // it uses black biased blitting (which we don't support yet).
@@ -218,13 +240,21 @@ internal class ImageExporter
             PropertySerializer.Serialize(
                 propertyListStream, sequence, sequence.Flags);
 
-            if (sequence.Textures != null)
+            Image[]? images = null;
+            images = _encoderFormat switch
+            {
+                EncoderFormat.Mode1 => throw new NotImplementedException(),
+                EncoderFormat.Mode2 => ((Mode2SequenceEncoder)encoder).ToImages(),
+                EncoderFormat.Mode3 => ((Mode3SequenceEncoder)encoder).ToImages(),
+                _ => throw new InvalidOperationException(),
+            };
+            if (images != null)
             {
                 string fileNamePrefix = sequenceName.Replace(" ", "");
-                for (int i = 0; i < sequence.Textures.Length; i++)
+                for (int i = 0; i < images.Length; i++)
                 {
-                    Image image = sequence.Textures[i];
-                    image.Save(
+                    using Image? image = images[i];
+                    image?.Save(
                         $"{finalExportPath}{fileNamePrefix}{i:0000}.tga",
                         _tgaEncoder);
                 }
