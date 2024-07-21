@@ -1,5 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics;
 using System.Text;
+using ICSharpCode.SharpZipLib.Zip;
 using NuVelocity.Graphics;
 using NuVelocity.Graphics.ImageSharp;
 using NuVelocity.Text;
@@ -10,6 +11,9 @@ namespace NuVelocity.Unpacker;
 
 internal class ImageExporter
 {
+    private const char kZipDirectorySeparatorChar = '/';
+    private const string kZipCacheDirectory = "Cache/";
+
     private readonly EncoderFormat _encoderFormat;
     private readonly string _frameExtension;
     private readonly string _sequenceExtension;
@@ -95,42 +99,12 @@ internal class ImageExporter
         return directoryName;
     }
 
-    private void ExportFromFrameFile(string file)
-    {
-        string parentPath = file;
-        if (_inputDataCacheDirectory != null)
-        {
-            parentPath = parentPath.Replace(_inputDataCacheDirectory, _inputDataDirectory);
-        }
-        string exportPath = parentPath.Replace(_inputDataDirectory, _outputDirectory);
-        Directory.CreateDirectory(GetDirectoryNameWithFallback(exportPath));
-        exportPath = exportPath.Replace(_frameExtension, "");
-
-        Stream? propertyListFile = null;
-        string[] framePropertyListSearchPaths = new string[]
-        {
-            parentPath.Replace(_frameExtension, ".txt"),
-            file.Replace(_frameExtension, ".txt"),
-            exportPath + ".txt"
-        };
-        foreach (string searchPath in framePropertyListSearchPaths)
-        {
-            if (File.Exists(searchPath))
-            {
-                propertyListFile = File.Open(searchPath, FileMode.Open);
-                break;
-            }
-        }
-
-        Stream frameFile = File.Open(file, FileMode.Open);
-        ExportFromFrameStream(file, exportPath, frameFile, propertyListFile);
-    }
-
     private void ExportFromFrameStream(
         string sourcePath,
         string exportPath,
         Stream frameStream,
-        Stream? propertyListStream)
+        Stream? propertyListStream,
+        string frameName)
     {
         string logLine = sourcePath;
         SlisFrameEncoder? encoder = null;
@@ -151,12 +125,13 @@ internal class ImageExporter
         }
         else
         {
+            string finalExportPath = Path.Combine(exportPath, frameName);
             if (_dumpRawData)
             {
+                Stream dumpPropertyListStream =
+                    File.Open($"{finalExportPath}.dmp.txt", FileMode.Create);
                 PropertySerializer.Serialize(
-                    File.Open($"{exportPath}.dmp.txt", FileMode.Create),
-                    frame,
-                    frame.Flags);
+                    dumpPropertyListStream, frame, frame.Flags);
 
                 for (int i = 0; i < encoder.LayerCount; i++)
                 {
@@ -165,33 +140,16 @@ internal class ImageExporter
                     {
                         continue;
                     }
-                    File.WriteAllBytes($"{exportPath}_layer{i}", layer);
+                    File.WriteAllBytes($"{finalExportPath}_layer{i}", layer);
                 }
             }
 
-            frame.Texture?.Save($"{exportPath}.tga", _tgaEncoder);
+            frame.Texture?.Save($"{finalExportPath}.tga", _tgaEncoder);
             logLine += $",{frame.CenterHotSpot},\"{frame.Flags}\"";
         }
 
         _logger.AppendLine(logLine);
         Console.WriteLine(logLine);
-    }
-
-    private void ExportFromSequenceFile(string file)
-    {
-        string sequenceName = Path.GetFileNameWithoutExtension(file);
-        string parentPath = file;
-        if (_inputDataCacheDirectory != null)
-        {
-            parentPath = parentPath.Replace(_inputDataCacheDirectory, _inputDataDirectory);
-        }
-        string exportPath = Path.Combine(
-            GetDirectoryNameWithFallback(parentPath)
-                .Replace(_inputDataDirectory, _outputDirectory),
-            "-" + sequenceName);
-        Directory.CreateDirectory(exportPath);
-        FileStream sequenceStream = File.Open(file, FileMode.Open);
-        ExportFromSequenceStream(file, exportPath, sequenceStream, sequenceName.Replace(" ", ""));
     }
 
     private void ExportFromSequenceStream(
@@ -221,21 +179,25 @@ internal class ImageExporter
         }
         else
         {
+            string finalExportPath =
+                Path.Combine(exportPath, $"-{sequenceName}")
+                + Path.DirectorySeparatorChar;
+            Directory.CreateDirectory(finalExportPath);
             if (_dumpRawData)
             {
                 if (encoder.ListData != null)
                 {
-                    File.WriteAllBytes($"{exportPath}\\_lists", encoder.ListData);
+                    File.WriteAllBytes($"{finalExportPath}_lists", encoder.ListData);
                 }
                 if (encoder.ImageData1 != null)
                 {
-                    File.WriteAllBytes($"{exportPath}\\_rawImage", encoder.ImageData1);
+                    File.WriteAllBytes($"{finalExportPath}_rawImage", encoder.ImageData1);
                 }
                 if (encoder.ImageData2 != null)
                 {
-                    File.WriteAllBytes($"{exportPath}\\_rawMask", encoder.ImageData2);
+                    File.WriteAllBytes($"{finalExportPath}_rawMask", encoder.ImageData2);
                 }
-                encoder.Spritesheet?.Save($"{exportPath}\\_atlas.tga", _tgaEncoder);
+                encoder.Spritesheet?.Save($"{finalExportPath}_atlas.tga", _tgaEncoder);
             }
 
             SlisSequence sequence = encoder.SlisSequence;
@@ -251,16 +213,19 @@ internal class ImageExporter
                 }
             }
 
-            FileStream propertySet = File.Create($"{exportPath}\\Properties.txt");
-            PropertySerializer.Serialize(propertySet, sequence, sequence.Flags);
+            Stream propertyListStream =
+                File.Create($"{finalExportPath}Properties.txt");
+            PropertySerializer.Serialize(
+                propertyListStream, sequence, sequence.Flags);
 
             if (sequence.Textures != null)
             {
+                string fileNamePrefix = sequenceName.Replace(" ", "");
                 for (int i = 0; i < sequence.Textures.Length; i++)
                 {
                     Image image = sequence.Textures[i];
                     image.Save(
-                        $"{exportPath}\\{sequenceName}{i:0000}.tga",
+                        $"{finalExportPath}{fileNamePrefix}{i:0000}.tga",
                         _tgaEncoder);
                 }
             }
@@ -270,6 +235,114 @@ internal class ImageExporter
 
         _logger.AppendLine(logLine);
         Console.WriteLine(logLine);
+    }
+
+    private void ExportDataFromZip(ZipFile zipFile, ZipEntry zipEntry)
+    {
+        string filePath = zipEntry.Name;
+
+        bool isFrame = filePath.EndsWith(
+            _frameExtension, StringComparison.OrdinalIgnoreCase);
+        bool isSequence = filePath.EndsWith(
+            _sequenceExtension, StringComparison.OrdinalIgnoreCase);
+
+        if (!isFrame && !isSequence)
+        {
+            return;
+        }
+
+        string parentPath = filePath;
+        if (parentPath.StartsWith(kZipCacheDirectory))
+        {
+            parentPath = parentPath.Replace(
+                kZipCacheDirectory, _inputDataDirectory);
+        }
+        string fileNameWithoutExtension =
+            Path.GetFileNameWithoutExtension(filePath);
+        string exportPath = Path.Combine(
+            _outputDirectory,
+            GetDirectoryNameWithFallback(
+                parentPath.Replace(
+                    kZipDirectorySeparatorChar,
+                    Path.DirectorySeparatorChar)));
+        Directory.CreateDirectory(exportPath);
+
+        Stream containerStream = zipFile.GetInputStream(zipEntry);
+        if (isFrame)
+        {
+            string propertyListPath = parentPath.Replace(
+                _frameExtension, ".txt");
+            Stream? propertyListStream = zipFile.GetInputStream(
+                zipFile.GetEntry(propertyListPath));
+            ExportFromFrameStream(
+                filePath,
+                exportPath,
+                containerStream,
+                propertyListStream,
+                fileNameWithoutExtension);
+            return;
+        }
+        ExportFromSequenceStream(
+            filePath,
+            exportPath,
+            containerStream,
+            fileNameWithoutExtension);
+    }
+
+    private void ExportDataFromDirectory(string filePath)
+    {
+        bool isFrame = filePath.EndsWith(
+            _frameExtension, StringComparison.OrdinalIgnoreCase);
+        bool isSequence = filePath.EndsWith(
+            _sequenceExtension, StringComparison.OrdinalIgnoreCase);
+
+        if (!isFrame && !isSequence)
+        {
+            return;
+        }
+
+        string parentPath = filePath;
+        if (_inputDataCacheDirectory != null)
+        {
+            parentPath = parentPath.Replace(
+                _inputDataCacheDirectory, _inputDataDirectory);
+        }
+        string fileNameWithoutExtension =
+            Path.GetFileNameWithoutExtension(filePath);
+        string exportPath = GetDirectoryNameWithFallback(
+            parentPath.Replace(_inputDataDirectory, _outputDirectory));
+        Directory.CreateDirectory(exportPath);
+
+        Stream containerStream = File.Open(filePath, FileMode.Open);
+        if (isFrame)
+        {
+            Stream? propertyListStream = null;
+            string[] framePropertyListSearchPaths = new string[]
+            {
+                parentPath.Replace(_frameExtension, ".txt"),
+                filePath.Replace(_frameExtension, ".txt"),
+            };
+            foreach (string searchPath in framePropertyListSearchPaths)
+            {
+                if (File.Exists(searchPath))
+                {
+                    propertyListStream = File.Open(searchPath, FileMode.Open);
+                    break;
+                }
+            }
+            ExportFromFrameStream(
+                filePath,
+                exportPath,
+                containerStream,
+                propertyListStream,
+                fileNameWithoutExtension);
+            return;
+        }
+        ExportFromSequenceStream(
+            filePath,
+            exportPath,
+            containerStream,
+            fileNameWithoutExtension);
     }
 
     public void ExportData()
@@ -283,21 +356,20 @@ internal class ImageExporter
 
         if (!string.IsNullOrWhiteSpace(_inputDataDirectory))
         {
-            IEnumerable<string> frameFiles = Directory.EnumerateFiles(
-                _inputDataDirectory,
-                "*" + _frameExtension,
-               SearchOption.AllDirectories);
-            Parallel.ForEach(frameFiles, ExportFromFrameFile);
-
-            IEnumerable<string> sequenceFiles = Directory.EnumerateFiles(
-                _inputDataDirectory,
-                "*" + _sequenceExtension,
-                SearchOption.AllDirectories);
-            Parallel.ForEach(sequenceFiles, ExportFromSequenceFile);
+            IEnumerable<string> files = Directory.EnumerateFiles(
+                _inputDataDirectory, "*.*", SearchOption.AllDirectories);
+            Parallel.ForEach(files,
+                ExportDataFromDirectory);
+        }
+        else if (!string.IsNullOrWhiteSpace(_inputDataFile))
+        {
+            using ZipFile zipFile = new(_inputDataFile);
+            Parallel.ForEach(zipFile,
+                (filePath) => ExportDataFromZip(zipFile, filePath));
         }
         else
         {
-            throw new NotImplementedException();
+            throw new InvalidOperationException();
         }
 
         File.WriteAllText("log.csv", _logger.ToString());

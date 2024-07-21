@@ -5,13 +5,28 @@ namespace NuVelocity.Unpacker;
 
 internal class Program
 {
-    private static void HandleRootCommand(EncoderFormat format, bool useTests, bool overrideBlackBlending)
+    private static void HandleRootCommand(
+        EncoderFormat format,
+        bool useTests,
+        bool overrideBlackBlending,
+        string input,
+        string output)
     {
         ImageExporter exporter = useTests
             ? new ImageExporter(
-                format, true, false, overrideBlackBlending, "Tests", "Tests\\Export")
+                format: format,
+                dumpRawData: true,
+                stripCacheFromPath: false,
+                overrideBlackBlending: overrideBlackBlending,
+                inputDataFileOrDirectory: "Tests",
+                outputFolder: Path.Combine("Tests", "Export"))
             : new ImageExporter(
-                format, false, true, overrideBlackBlending, "Data", "Data\\Export");
+                format: format,
+                dumpRawData: false,
+                stripCacheFromPath: true,
+                overrideBlackBlending: overrideBlackBlending,
+                inputDataFileOrDirectory: input,
+                outputFolder: output);
 
         exporter.ExportData();
     }
@@ -33,15 +48,32 @@ internal class Program
             description: "Override the blended with black and blend black bias blit type with alternative values.",
             getDefaultValue: () => false);
 
+        var inputOption = new Option<string>(
+            name: "--i",
+            description: "Input data archive file or data directory.",
+            getDefaultValue: () => "Data");
+
+        var outputOption = new Option<string>(
+            name: "--o",
+            description: "Output directory to store decoded files.",
+            getDefaultValue: () => Path.Combine("Data", "Export"));
+
         var rootCommand = new RootCommand("NuVelocity Unpacker")
         {
             formatOption,
             testOption,
-            overrideBlackBlendingOption
+            overrideBlackBlendingOption,
+            inputOption,
+            outputOption
         };
 
-        rootCommand.SetHandler(HandleRootCommand,
-            formatOption, testOption, overrideBlackBlendingOption);
+        rootCommand.SetHandler(
+            HandleRootCommand,
+            formatOption,
+            testOption,
+            overrideBlackBlendingOption,
+            inputOption,
+            outputOption);
 
         return await rootCommand.InvokeAsync(args);
     }
