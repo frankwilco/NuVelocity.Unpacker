@@ -128,7 +128,7 @@ internal class ImageExporter
             string finalExportPath = Path.Combine(exportPath, frameName);
             if (_dumpRawData)
             {
-                Stream dumpPropertyListStream =
+                using Stream dumpPropertyListStream =
                     File.Open($"{finalExportPath}.dmp.txt", FileMode.Create);
                 PropertySerializer.Serialize(
                     dumpPropertyListStream, frame, frame.Flags);
@@ -213,7 +213,7 @@ internal class ImageExporter
                 }
             }
 
-            Stream propertyListStream =
+            using Stream propertyListStream =
                 File.Create($"{finalExportPath}Properties.txt");
             PropertySerializer.Serialize(
                 propertyListStream, sequence, sequence.Flags);
@@ -267,13 +267,15 @@ internal class ImageExporter
                     Path.DirectorySeparatorChar)));
         Directory.CreateDirectory(exportPath);
 
-        Stream containerStream = zipFile.GetInputStream(zipEntry);
+        using Stream containerStream = zipFile.GetInputStream(zipEntry);
         if (isFrame)
         {
             string propertyListPath = parentPath.Replace(
                 _frameExtension, ".txt");
-            Stream? propertyListStream = zipFile.GetInputStream(
-                zipFile.GetEntry(propertyListPath));
+            ZipEntry? propertyListZipEntry = zipFile.GetEntry(propertyListPath);
+            using Stream? propertyListStream = propertyListZipEntry == null
+                ? null
+                : zipFile.GetInputStream(propertyListZipEntry);
             ExportFromFrameStream(
                 filePath,
                 exportPath,
@@ -313,7 +315,7 @@ internal class ImageExporter
             parentPath.Replace(_inputDataDirectory, _outputDirectory));
         Directory.CreateDirectory(exportPath);
 
-        Stream containerStream = File.Open(filePath, FileMode.Open);
+        using Stream containerStream = File.Open(filePath, FileMode.Open);
         if (isFrame)
         {
             Stream? propertyListStream = null;
@@ -336,6 +338,7 @@ internal class ImageExporter
                 containerStream,
                 propertyListStream,
                 fileNameWithoutExtension);
+            propertyListStream?.Dispose();
             return;
         }
         ExportFromSequenceStream(
