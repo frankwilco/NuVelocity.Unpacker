@@ -354,6 +354,8 @@ internal class ImageExporter
 
         _logger.Clear();
 
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
         if (!string.IsNullOrWhiteSpace(_inputDataDirectory))
         {
             IEnumerable<string> files = Directory.EnumerateFiles(
@@ -371,6 +373,10 @@ internal class ImageExporter
         {
             throw new InvalidOperationException();
         }
+
+        stopwatch.Stop();
+        TimeSpan elapsedTime = stopwatch.Elapsed;
+        Console.WriteLine("Elapsed time: {0}", elapsedTime);
 
         File.WriteAllText("log.csv", _logger.ToString());
 
