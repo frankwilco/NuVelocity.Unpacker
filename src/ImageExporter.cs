@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using ICSharpCode.SharpZipLib.Zip;
 using NuVelocity.Graphics;
@@ -24,7 +25,7 @@ internal class ImageExporter
     private readonly string? _inputDataCacheDirectory;
     private readonly string _outputDirectory;
     private readonly TgaEncoder _tgaEncoder;
-    private readonly StringBuilder _logger;
+    private string[] _logs;
 
     public ImageExporter(
         EncoderFormat format,
@@ -86,7 +87,6 @@ internal class ImageExporter
         _dumpRawData = dumpRawData;
         _overrideBlackBlending = overrideBlackBlending;
         _outputDirectory = Path.GetFullPath(outputFolder);
-        _logger = new();
     }
 
     private static string GetDirectoryNameWithFallback(string? path)
@@ -99,7 +99,7 @@ internal class ImageExporter
         return directoryName;
     }
 
-    private void ExportFromFrameStream(
+    private string ExportFromFrameStream(
         string sourcePath,
         string exportPath,
         Stream frameStream,
@@ -162,11 +162,10 @@ internal class ImageExporter
             logLine += $",{frame.CenterHotSpot},\"{frame.Flags}\"";
         }
 
-        _logger.AppendLine(logLine);
-        Console.WriteLine(logLine);
+        return logLine;
     }
 
-    private void ExportFromSequenceStream(
+    private string ExportFromSequenceStream(
         string sourcePath,
         string exportPath,
         Stream sequenceStream,
@@ -263,11 +262,10 @@ internal class ImageExporter
             logLine += $",{sequence.CenterHotSpot},\"{sequence.Flags}\"";
         }
 
-        _logger.AppendLine(logLine);
-        Console.WriteLine(logLine);
+        return logLine;
     }
 
-    private void ExportDataFromZip(ZipFile zipFile, ZipEntry zipEntry)
+    private void ExportDataFromZip(ZipFile zipFile, ZipEntry zipEntry, long index)
     {
         string filePath = zipEntry.Name;
 
@@ -297,6 +295,7 @@ internal class ImageExporter
                     Path.DirectorySeparatorChar)));
         Directory.CreateDirectory(exportPath);
 
+        string logLine;
         using Stream containerStream = zipFile.GetInputStream(zipEntry);
         if (isFrame)
         {
@@ -306,22 +305,26 @@ internal class ImageExporter
             using Stream? propertyListStream = propertyListZipEntry == null
                 ? null
                 : zipFile.GetInputStream(propertyListZipEntry);
-            ExportFromFrameStream(
+            logLine = ExportFromFrameStream(
                 filePath,
                 exportPath,
                 containerStream,
                 propertyListStream,
                 fileNameWithoutExtension);
-            return;
         }
-        ExportFromSequenceStream(
-            filePath,
-            exportPath,
-            containerStream,
-            fileNameWithoutExtension);
+        else
+        {
+            logLine = ExportFromSequenceStream(
+                filePath,
+                exportPath,
+                containerStream,
+                fileNameWithoutExtension);
+        }
+        _logs[index] = logLine;
+        Console.WriteLine(logLine);
     }
 
-    private void ExportDataFromDirectory(string filePath)
+    private void ExportDataFromDirectory(string filePath, ParallelLoopState loopState, long index)
     {
         bool isFrame = filePath.EndsWith(
             _frameExtension, StringComparison.OrdinalIgnoreCase);
@@ -345,6 +348,7 @@ internal class ImageExporter
             parentPath.Replace(_inputDataDirectory, _outputDirectory));
         Directory.CreateDirectory(exportPath);
 
+        string logLine;
         using Stream containerStream = File.Open(filePath, FileMode.Open);
         if (isFrame)
         {
@@ -362,20 +366,24 @@ internal class ImageExporter
                     break;
                 }
             }
-            ExportFromFrameStream(
+            logLine = ExportFromFrameStream(
                 filePath,
                 exportPath,
                 containerStream,
                 propertyListStream,
                 fileNameWithoutExtension);
             propertyListStream?.Dispose();
-            return;
         }
-        ExportFromSequenceStream(
-            filePath,
-            exportPath,
-            containerStream,
-            fileNameWithoutExtension);
+        else
+        {
+            logLine = ExportFromSequenceStream(
+                filePath,
+                exportPath,
+                containerStream,
+                fileNameWithoutExtension);
+        }
+        _logs[index] = logLine;
+        Console.WriteLine(logLine);
     }
 
     public void ExportData()
@@ -385,22 +393,23 @@ internal class ImageExporter
             File.Delete("log.txt");
         }
 
-        _logger.Clear();
-
         Stopwatch stopwatch = Stopwatch.StartNew();
 
         if (!string.IsNullOrWhiteSpace(_inputDataDirectory))
         {
-            IEnumerable<string> files = Directory.EnumerateFiles(
+            string[] files = Directory.GetFiles(
                 _inputDataDirectory, "*.*", SearchOption.AllDirectories);
-            Parallel.ForEach(files,
-                ExportDataFromDirectory);
+            _logs = new string[files.Length];
+            Parallel.ForEach(files, ExportDataFromDirectory);
         }
         else if (!string.IsNullOrWhiteSpace(_inputDataFile))
         {
             using ZipFile zipFile = new(_inputDataFile);
-            Parallel.ForEach(zipFile,
-                (filePath) => ExportDataFromZip(zipFile, filePath));
+            _logs = new string[zipFile.Count];
+            void ExportDataFromZipWithContext(
+                ZipEntry filePath, ParallelLoopState loopState, long index)
+                => ExportDataFromZip(zipFile, filePath, index);
+            Parallel.ForEach(zipFile, ExportDataFromZipWithContext);
         }
         else
         {
@@ -411,7 +420,7 @@ internal class ImageExporter
         TimeSpan elapsedTime = stopwatch.Elapsed;
         Console.WriteLine("Elapsed time: {0}", elapsedTime);
 
-        File.WriteAllText("log.csv", _logger.ToString());
+        File.WriteAllLines("log.csv", _logs.Where(line => line != null));
 
         Console.WriteLine("Done.");
     }
