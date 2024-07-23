@@ -1,6 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Text;
+﻿using System.Diagnostics;
 using ICSharpCode.SharpZipLib.Zip;
 using NuVelocity.Graphics;
 using NuVelocity.Graphics.ImageSharp;
@@ -64,6 +62,7 @@ internal class ImageExporter
 
         _inputDataDirectory = "";
         _inputDataFile = "";
+        _logs = Array.Empty<string>();
 
         if (Directory.Exists(inputDataFileOrDirectory))
         {
