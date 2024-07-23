@@ -2,27 +2,39 @@
   "profiles": {
     "Mode 3": {
       "commandName": "Project",
-      "commandLineArgs": "--format Mode3"
+      "commandLineArgs": "decode-cache --format Mode3 --i Data --o ExportLocal3"
+    },
+    "Mode 3: ZIP": {
+      "commandName": "Project",
+      "commandLineArgs": "decode-cache --format Mode3 --i Data.dat --o ExportZip3"
+    },
+    "Mode 3: Test": {
+      "commandName": "Project",
+      "commandLineArgs": "decode-cache --format Mode3 --test"
     },
     "Mode 2": {
       "commandName": "Project",
-      "commandLineArgs": "--format Mode2"
+      "commandLineArgs": "decode-cache --format Mode2 --i Data --o ExportLocal2"
+    },
+    "Mode 2: ZIP": {
+      "commandName": "Project",
+      "commandLineArgs": "decode-cache --format Mode2 --i Data.dat --o ExportZip2"
+    },
+    "Mode 2: Test": {
+      "commandName": "Project",
+      "commandLineArgs": "decode-cache --format Mode2 --test"
     },
     "Mode 1": {
       "commandName": "Project",
-      "commandLineArgs": "--format Mode1"
+      "commandLineArgs": "decode-cache --format Mode1 --i Data --o ExportLocal1"
     },
-    "Mode 3 - Test": {
+    "Mode 1: ZIP": {
       "commandName": "Project",
-      "commandLineArgs": "--format Mode3 --test"
+      "commandLineArgs": "decode-cache --format Mode1 --i Data.dat --o ExportZip1"
     },
-    "Mode 2 - Test": {
+    "Mode 1: Test": {
       "commandName": "Project",
-      "commandLineArgs": "--format Mode2 --test"
-    },
-    "Mode 1 - Test": {
-      "commandName": "Project",
-      "commandLineArgs": "--format Mode1 --test"
+      "commandLineArgs": "decode-cache --format Mode1 --test"
     }
   }
 }
