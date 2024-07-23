@@ -5,7 +5,7 @@ namespace NuVelocity.Unpacker;
 
 internal class Program
 {
-    private static void HandleRootCommand(
+    private static void HandleDecodeCacheSubcommand(
         EncoderFormat format,
         bool useTests,
         bool overrideBlackBlending,
@@ -31,34 +31,36 @@ internal class Program
         exporter.ExportData();
     }
 
-    private static async Task<int> Main(string[] args)
+    private static void AddDecodeCacheSubcommand(RootCommand root)
     {
-        var formatOption = new Option<EncoderFormat>(
+        Option<EncoderFormat> formatOption = new(
             name: "--format",
             description: "The format to be used when decoding cache files.",
             getDefaultValue: () => EncoderFormat.Mode3);
 
-        var testOption = new Option<bool>(
+        Option<bool> testOption = new(
             name: "--test",
             description: "Use the Tests directory for decoding.",
             getDefaultValue: () => false);
 
-        var overrideBlackBlendingOption = new Option<bool>(
+        Option<bool> overrideBlackBlendingOption = new(
             name: "--override-black-blending",
             description: "Override the blended with black and blend black bias blit type with alternative values.",
             getDefaultValue: () => false);
 
-        var inputOption = new Option<string>(
+        Option<string> inputOption = new(
             name: "--i",
             description: "Input data archive file or data directory.",
             getDefaultValue: () => "Data");
 
-        var outputOption = new Option<string>(
+        Option<string> outputOption = new(
             name: "--o",
             description: "Output directory to store decoded files.",
             getDefaultValue: () => Path.Combine("Data", "Export"));
 
-        var rootCommand = new RootCommand("NuVelocity Unpacker")
+        Command decodeCacheCommand = new(
+            "decode-cache",
+            "Decode cached frames and sequences back into TGA images.")
         {
             formatOption,
             testOption,
@@ -67,13 +69,23 @@ internal class Program
             outputOption
         };
 
-        rootCommand.SetHandler(
-            HandleRootCommand,
+        decodeCacheCommand.SetHandler(
+            HandleDecodeCacheSubcommand,
             formatOption,
             testOption,
             overrideBlackBlendingOption,
             inputOption,
             outputOption);
+
+        root.AddCommand(decodeCacheCommand);
+    }
+
+    private static async Task<int> Main(string[] args)
+    {
+        RootCommand rootCommand = new(
+            "Unpacker for various Velocity Engine file formats.");
+
+        AddDecodeCacheSubcommand(rootCommand);
 
         return await rootCommand.InvokeAsync(args);
     }
