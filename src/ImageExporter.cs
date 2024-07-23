@@ -387,11 +387,6 @@ internal class ImageExporter
 
     public void ExportData()
     {
-        if (File.Exists("log.txt"))
-        {
-            File.Delete("log.txt");
-        }
-
         Stopwatch stopwatch = Stopwatch.StartNew();
 
         if (!string.IsNullOrWhiteSpace(_inputDataDirectory))
