@@ -136,8 +136,9 @@ internal class ImageExporter
             {
                 using Stream dumpPropertyListStream =
                     File.Open($"{finalExportPath}.dmp.txt", FileMode.Create);
-                PropertySerializer.Serialize(
-                    dumpPropertyListStream, frame, frame.Flags);
+                bool isCompact = false; // TODO: add CLI option.
+                PropertyListSerializer.Serialize(
+                    dumpPropertyListStream, frame, isCompact);
 
                 for (int i = 0; i < encoder.LayerCount; i++)
                 {
@@ -158,7 +159,7 @@ internal class ImageExporter
                 _ => throw new InvalidOperationException(),
             };
             image?.Save($"{finalExportPath}.tga", _tgaEncoder);
-            logLine += $",{frame.CenterHotSpot},\"{frame.Flags}\"";
+            logLine += $",{frame.CenterHotSpot},\"{frame.Format}\"";
         }
 
         return logLine;
@@ -235,8 +236,9 @@ internal class ImageExporter
 
             using Stream propertyListStream =
                 File.Create($"{finalExportPath}Properties.txt");
-            PropertySerializer.Serialize(
-                propertyListStream, sequence, sequence.Flags);
+            bool isCompact = false; // TODO: add CLI option.
+            PropertyListSerializer.Serialize(
+                propertyListStream, sequence, isCompact);
 
             Image[]? images = null;
             images = _encoderFormat switch
@@ -258,7 +260,7 @@ internal class ImageExporter
                 }
             }
 
-            logLine += $",{sequence.CenterHotSpot},\"{sequence.Flags}\"";
+            logLine += $",{sequence.CenterHotSpot},\"{sequence.ToDebugString()}\"";
         }
 
         return logLine;
